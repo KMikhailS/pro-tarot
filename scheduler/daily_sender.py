@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 # Константы для работы с картами
 CARDS_BASE_DIR = Path("cards/images")
+CARDS_DESC_DIR = Path("cards/description")
 # TOTAL_CARDS = 78  # Карты нумеруются от 0 до 77 (всего 78 карт Таро)
 TOTAL_CARDS = 21  # Карты нумеруются от 0 до 77 (всего 78 карт Таро)
 
@@ -43,7 +44,7 @@ def get_card_path(deck_type: str, card_number: int) -> Optional[Path]:
     Returns:
         Path к файлу карты или None если карта не найдена
     """
-    folder = DECK_FOLDERS.get(deck_type, 'raider')
+    folder = DECK_FOLDERS.get(deck_type, 'alfons')
     card_path = CARDS_BASE_DIR / folder / f"{card_number}.jpg"
 
     if card_path.exists():
@@ -61,6 +62,59 @@ def get_random_card_number() -> int:
         Случайное число в диапазоне [0, 77]
     """
     return random.randint(0, TOTAL_CARDS - 1)
+
+
+def markdown_to_html(text: str) -> str:
+    """
+    Конвертирует Markdown разметку в HTML для Telegram.
+
+    Args:
+        text: Текст с Markdown разметкой
+
+    Returns:
+        Текст с HTML разметкой
+    """
+    import re
+    # Заменяем **текст** на <b>текст</b>
+    text = re.sub(r'\*\*([^*]+)\*\*', r'<b>\1</b>', text)
+    return text
+
+
+def get_card_description(card_number: int) -> tuple[str, str]:
+    """
+    Получить название и описание карты из файла.
+
+    Args:
+        card_number: Номер карты (0-77)
+
+    Returns:
+        Кортеж (название, полное описание с HTML разметкой)
+    """
+    desc_path = CARDS_DESC_DIR / f"{card_number}.txt"
+
+    try:
+        with open(desc_path, 'r', encoding='utf-8') as f:
+            content = f.read().strip()
+            if not content:
+                return "", ""
+
+            # Разделяем на строки
+            lines = content.split('\n', 1)
+            card_name = lines[0].strip()
+
+            # Всё после первой строки — это полное описание
+            card_desc = lines[1].strip() if len(lines) > 1 else ""
+
+            # Конвертируем Markdown в HTML
+            card_desc = markdown_to_html(card_desc)
+
+            return card_name, card_desc
+    except FileNotFoundError:
+        logger.warning(f"Description file not found: {desc_path}")
+        return "", ""
+    except Exception as e:
+        logger.error(f"Error reading card description {card_number}: {e}")
+        return "", ""
 
 
 async def send_daily_card(bot: Bot, user_id: int, deck_type: str):
@@ -92,20 +146,22 @@ async def send_daily_card(bot: Bot, user_id: int, deck_type: str):
             )
             return
 
+        # Получаем описание карты
+        card_name, card_desc = get_card_description(card_number)
+
         # Отправляем карту
         photo = FSInputFile(card_path)
-        deck_name = DECK_NAMES.get(deck_type, 'Таро')
 
-        caption = (
-            f"🌅 Ваша карта дня\n\n"
-            f"Колода: {deck_name}\n"
-            f"Карта #{card_number}"
-        )
+        # Формируем подпись с названием и описанием
+        caption = f"🌅 Ваша карта дня: {card_name}\n\n"
+        if card_desc:
+            caption += f"{card_desc}"
 
         await bot.send_photo(
             chat_id=user_id,
             photo=photo,
-            caption=caption
+            caption=caption,
+            parse_mode='HTML'
         )
 
         # Отмечаем отправку в БД

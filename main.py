@@ -9,7 +9,7 @@ from dotenv import load_dotenv, find_dotenv
 
 from messages import ABOUT_TEXT
 from database.db import init_db, add_user
-from handlers import settings
+from handlers import settings, cards
 from scheduler.daily_sender import start_daily_sender
 
 # Настройка логирования
@@ -52,6 +52,7 @@ async def main():
     # Регистрируем роутеры
     dp.include_router(router)
     dp.include_router(settings.router)
+    dp.include_router(cards.router)
 
     # Запуск планировщика в фоне
     start_daily_sender(bot)

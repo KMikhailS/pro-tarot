@@ -35,11 +35,19 @@ async def init_db():
 
 
 async def add_user(user_id: int, username: Optional[str], first_name: Optional[str]):
-    """Добавить нового пользователя или обновить существующего"""
+    """
+    Добавить нового пользователя или обновить существующего.
+
+    Настройки по умолчанию для новых пользователей:
+    - daily_card_enabled = 1 (включено)
+    - timezone_offset = 180 (GMT+3)
+    - deck_type = 'alfons_mucha' (Колода Альфонса Мухи)
+    - send_hour = 8 (08:00)
+    """
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
-            """INSERT INTO users (user_id, username, first_name, created_at, daily_card_enabled, timezone_offset)
-               VALUES (?, ?, ?, ?, 1, 180)
+            """INSERT INTO users (user_id, username, first_name, created_at, daily_card_enabled, timezone_offset, deck_type, send_hour)
+               VALUES (?, ?, ?, ?, 1, 180, 'alfons_mucha', 8)
                ON CONFLICT(user_id) DO UPDATE SET
                    username = excluded.username,
                    first_name = excluded.first_name""",
