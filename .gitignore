@@ -1,0 +1,90 @@
+# ── ОС и общие мусорные файлы
+.DS_Store
+Thumbs.db
+
+# ── PyCharm / JetBrains
+.idea/
+# (JetBrains иногда создает .idea/.gitignore — его можно оставить как есть)
+*.iml
+
+todo
+cards/images
+
+# ── Виртуальные окружения
+venv/
+.env/
+.venv/
+env/
+ENV/
+pip-wheel-metadata/
+pip-wheel/
+pip-log.txt
+
+# ── Python байткод и кэши
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ── Логи и временные файлы
+*.log
+*.tmp
+*.temp
+*.swp
+*.swo
+
+# ── Пакетирование / дистрибуция
+build/
+dist/
+.eggs/
+*.egg
+*.egg-info/
+MANIFEST
+
+# ── Coverage / тесты / инструменты качества
+.coverage
+.coverage.*
+.cache/
+.pytest_cache/
+.tox/
+.nox/
+.mypy_cache/
+.dmypy.json
+.pytype/
+.pyre/
+ruff_cache/
+
+# ── Документация
+docs/_build/
+site/
+
+# ── Jupyter
+.ipynb_checkpoints/
+
+# ── Базы данных / локальные данные
+db.sqlite3
+*.sqlite3
+*.db
+*.sqlite
+*.sqlite-journal
+
+# ── Переменные окружения и локальные конфиги
+.env
+.env.*.local
+*.local
+*.secret
+secrets/*.json
+secrets/*.yaml
+
+# ── Кэш менеджеров зависимостей
+.poetry/
+poetry.lock
+Pipfile.lock
+
+# ── IDE и редакторы (на всякий случай)
+.vscode/
+*.code-workspace
+
+# ── Контейнеры / оркестрация (если генерируются локально)
+docker-data/
+
+photos
