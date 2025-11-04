@@ -9,6 +9,8 @@ Thumbs.db
 
 todo
 cards/images
+docs
+.claude
 
 # ── Виртуальные окружения
 venv/

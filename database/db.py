@@ -1,0 +1,199 @@
+"""Модуль работы с SQLite базой данных"""
+
+import aiosqlite
+from typing import Optional, List
+from datetime import datetime, date
+
+DB_PATH = "tarot_bot.db"
+
+
+async def init_db():
+    """Инициализация базы данных с таблицей users"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                user_id INTEGER PRIMARY KEY,
+                username TEXT,
+                first_name TEXT,
+                created_at TEXT NOT NULL,
+                daily_card_enabled INTEGER DEFAULT 1,
+                send_hour INTEGER,
+                timezone_offset INTEGER DEFAULT 0,
+                deck_type TEXT DEFAULT 'rider_waite',
+                last_daily_card_date TEXT
+            )
+        """)
+
+        # Индекс для быстрого поиска пользователей для отправки
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_daily_send
+            ON users(daily_card_enabled, send_hour, last_daily_card_date)
+            WHERE daily_card_enabled = 1
+        """)
+
+        await db.commit()
+
+
+async def add_user(user_id: int, username: Optional[str], first_name: Optional[str]):
+    """Добавить нового пользователя или обновить существующего"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """INSERT INTO users (user_id, username, first_name, created_at, daily_card_enabled, timezone_offset)
+               VALUES (?, ?, ?, ?, 1, 180)
+               ON CONFLICT(user_id) DO UPDATE SET
+                   username = excluded.username,
+                   first_name = excluded.first_name""",
+            (user_id, username, first_name, datetime.now().isoformat())
+        )
+        await db.commit()
+
+
+async def get_user_settings(user_id: int) -> Optional[dict]:
+    """Получить настройки пользователя"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            """SELECT user_id, daily_card_enabled, send_hour,
+                      timezone_offset, deck_type, last_daily_card_date
+               FROM users WHERE user_id = ?""",
+            (user_id,)
+        ) as cursor:
+            row = await cursor.fetchone()
+            if row:
+                return dict(row)
+            return None
+
+
+async def toggle_daily_card(user_id: int) -> bool:
+    """Переключить статус ежедневной карты. Возвращает новый статус."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT daily_card_enabled FROM users WHERE user_id = ?",
+            (user_id,)
+        ) as cursor:
+            row = await cursor.fetchone()
+            current_status = row[0] if row else 0
+
+        new_status = 0 if current_status else 1
+
+        await db.execute(
+            "UPDATE users SET daily_card_enabled = ? WHERE user_id = ?",
+            (new_status, user_id)
+        )
+        await db.commit()
+        return bool(new_status)
+
+
+async def get_user_send_hour(user_id: int) -> Optional[int]:
+    """Получить час отправки пользователя (0-23)"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT send_hour FROM users WHERE user_id = ?",
+            (user_id,)
+        ) as cursor:
+            row = await cursor.fetchone()
+            return row[0] if row else None
+
+
+async def update_user_send_hour(user_id: int, hour: int):
+    """Обновить час отправки (0-23)"""
+    if not 0 <= hour <= 23:
+        raise ValueError("Hour must be between 0 and 23")
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE users SET send_hour = ? WHERE user_id = ?",
+            (hour, user_id)
+        )
+        await db.commit()
+
+
+async def get_user_deck(user_id: int) -> str:
+    """Получить тип колоды пользователя"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT deck_type FROM users WHERE user_id = ?",
+            (user_id,)
+        ) as cursor:
+            row = await cursor.fetchone()
+            return row[0] if row else "rider_waite"
+
+
+async def update_user_deck(user_id: int, deck_type: str):
+    """Обновить тип колоды"""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE users SET deck_type = ? WHERE user_id = ?",
+            (deck_type, user_id)
+        )
+        await db.commit()
+
+
+async def update_user_timezone(user_id: int, timezone_offset: int):
+    """
+    Обновить часовой пояс пользователя
+
+    Args:
+        user_id: ID пользователя
+        timezone_offset: Смещение относительно UTC в минутах (от -720 до +840)
+    """
+    # Валидация: от -12 часов (-720 минут) до +14 часов (+840 минут)
+    if not -720 <= timezone_offset <= 840:
+        raise ValueError("Timezone offset must be between -720 and +840 minutes (-12 to +14 hours)")
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE users SET timezone_offset = ? WHERE user_id = ?",
+            (timezone_offset, user_id)
+        )
+        await db.commit()
+
+
+async def get_users_for_daily_send(utc_hour: int) -> List[dict]:
+    """
+    Получить список пользователей для отправки карты дня в указанный UTC час.
+
+    Логика расчета:
+    - Пользователь хранит send_hour в своем локальном времени
+    - timezone_offset - смещение от UTC в минутах (например, UTC+3 = 180)
+    - Чтобы найти пользователей для текущего UTC часа, мы ищем тех,
+      у кого (send_hour - timezone_offset/60) = utc_hour
+
+    Пример:
+    - Пользователь в UTC+3 хочет получать карту в 09:00 локально
+    - send_hour = 9, timezone_offset = 180
+    - Когда UTC время 06:00, мы ищем: 9 - 180/60 = 9 - 3 = 6 ✓
+
+    Args:
+        utc_hour: Текущий час UTC (0-23)
+
+    Returns:
+        Список словарей с информацией о пользователях
+    """
+    today = date.today().isoformat()
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            """SELECT user_id, deck_type, timezone_offset, send_hour
+               FROM users
+               WHERE daily_card_enabled = 1
+               AND send_hour IS NOT NULL
+               AND (last_daily_card_date IS NULL OR last_daily_card_date != ?)
+               AND (send_hour - CAST(timezone_offset AS FLOAT) / 60) = ?""",
+            (today, utc_hour)
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+
+
+async def mark_daily_card_sent(user_id: int):
+    """Отметить, что карта дня отправлена сегодня"""
+    today = date.today().isoformat()
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE users SET last_daily_card_date = ? WHERE user_id = ?",
+            (today, user_id)
+        )
+        await db.commit()
