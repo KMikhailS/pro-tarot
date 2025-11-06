@@ -97,9 +97,15 @@ async def cmd_settings(message: Message):
         timezone=timezone
     )
 
+    # Динамический текст кнопки toggle
+    daily_enabled = settings and settings['daily_card_enabled']
+    toggle_button_text = "❌ Выключить карту дня" if daily_enabled else "✅ Включить карту дня"
+
     keyboard = InlineKeyboardBuilder()
     keyboard.button(text="🎴 Выбор колоды", callback_data="settings:deck")
-    keyboard.button(text="🌅 Карта дня", callback_data="settings:daily_menu")
+    keyboard.button(text=toggle_button_text, callback_data="settings:daily_toggle")
+    keyboard.button(text="⏰ Время отправки", callback_data="settings:time")
+    keyboard.button(text="🌍 Часовой пояс", callback_data="settings:timezone")
     keyboard.button(text="🔙 Главное меню", callback_data="menu:main")
     keyboard.adjust(1)
 
@@ -133,9 +139,15 @@ async def callback_settings_main(callback: CallbackQuery):
         timezone=timezone
     )
 
+    # Динамический текст кнопки toggle
+    daily_enabled = settings and settings['daily_card_enabled']
+    toggle_button_text = "❌ Выключить карту дня" if daily_enabled else "✅ Включить карту дня"
+
     keyboard = InlineKeyboardBuilder()
     keyboard.button(text="🎴 Выбор колоды", callback_data="settings:deck")
-    keyboard.button(text="🌅 Карта дня", callback_data="settings:daily_menu")
+    keyboard.button(text=toggle_button_text, callback_data="settings:daily_toggle")
+    keyboard.button(text="⏰ Время отправки", callback_data="settings:time")
+    keyboard.button(text="🌍 Часовой пояс", callback_data="settings:timezone")
     keyboard.button(text="🔙 Главное меню", callback_data="menu:main")
     keyboard.adjust(1)
 
@@ -200,7 +212,7 @@ async def callback_daily_toggle(callback: CallbackQuery):
         text = DAILY_DISABLED_TEXT
 
     keyboard = InlineKeyboardBuilder()
-    keyboard.button(text="🔙 Назад к настройкам карты дня", callback_data="settings:daily_menu")
+    keyboard.button(text="🔙 Назад в настройки", callback_data="settings:main")
 
     await callback.message.edit_text(text, reply_markup=keyboard.as_markup())
     await callback.answer()
@@ -225,7 +237,7 @@ async def callback_time_selection(callback: CallbackQuery):
         button_text = f"{'✓ ' if hour == current_hour else ''}{hour:02d}:00"
         keyboard.button(text=button_text, callback_data=f"time:select:{hour}")
 
-    keyboard.button(text="🔙 Назад к настройкам карты дня", callback_data="settings:daily_menu")
+    keyboard.button(text="🔙 Назад в настройки", callback_data="settings:main")
     keyboard.adjust(6, 6, 6, 6, 1)  # 4 строки по 6 часов + кнопка назад
 
     await callback.message.edit_text(text, reply_markup=keyboard.as_markup())
@@ -242,7 +254,7 @@ async def callback_time_select(callback: CallbackQuery):
     text = TIME_SET_SUCCESS.format(hour=f"{hour:02d}:00")
 
     keyboard = InlineKeyboardBuilder()
-    keyboard.button(text="🔙 Назад к настройкам карты дня", callback_data="settings:daily_menu")
+    keyboard.button(text="🔙 Назад в настройки", callback_data="settings:main")
 
     await callback.message.edit_text(text, reply_markup=keyboard.as_markup())
     await callback.answer("Время установлено!")
@@ -274,7 +286,7 @@ async def callback_timezone_selection(callback: CallbackQuery):
         button_text = f"{hour:02d}"
         keyboard.button(text=button_text, callback_data=f"timezone:set:{hour}")
 
-    keyboard.button(text="🔙 Назад", callback_data="settings:daily_menu")
+    keyboard.button(text="🔙 Назад в настройки", callback_data="settings:main")
     keyboard.adjust(6, 6, 6, 6, 1)  # 4 строки по 6 часов + кнопка назад
 
     await callback.message.edit_text(text, reply_markup=keyboard.as_markup())
@@ -319,7 +331,7 @@ async def callback_timezone_set(callback: CallbackQuery):
         text = TIMEZONE_SET_SUCCESS.format(timezone=timezone_str)
 
         keyboard = InlineKeyboardBuilder()
-        keyboard.button(text="🔙 Назад к настройкам карты дня", callback_data="settings:daily_menu")
+        keyboard.button(text="🔙 Назад в настройки", callback_data="settings:main")
 
         await callback.message.edit_text(text, reply_markup=keyboard.as_markup())
         await callback.answer("Часовой пояс установлен!")

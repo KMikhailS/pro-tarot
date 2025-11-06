@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 from aiogram import Bot
-from aiogram.types import FSInputFile
+from aiogram.types import BufferedInputFile
 
 from database.db import get_users_for_daily_send, mark_daily_card_sent
 
@@ -80,9 +80,9 @@ def markdown_to_html(text: str) -> str:
     return text
 
 
-def get_card_description(card_number: int) -> tuple[str, str]:
+async def get_card_description(card_number: int) -> tuple[str, str]:
     """
-    Получить название и описание карты из файла.
+    Асинхронно получить название и описание карты из файла.
 
     Args:
         card_number: Номер карты (0-77)
@@ -90,11 +90,15 @@ def get_card_description(card_number: int) -> tuple[str, str]:
     Returns:
         Кортеж (название, полное описание с HTML разметкой)
     """
+    import aiofiles
+
     desc_path = CARDS_DESC_DIR / f"{card_number}.txt"
 
     try:
-        with open(desc_path, 'r', encoding='utf-8') as f:
-            content = f.read().strip()
+        async with aiofiles.open(desc_path, 'r', encoding='utf-8') as f:
+            content = await f.read()
+            content = content.strip()
+
             if not content:
                 return "", ""
 
@@ -147,10 +151,15 @@ async def send_daily_card(bot: Bot, user_id: int, deck_type: str):
             return
 
         # Получаем описание карты
-        card_name, card_desc = get_card_description(card_number)
+        card_name, card_desc = await get_card_description(card_number)
 
-        # Отправляем карту
-        photo = FSInputFile(card_path)
+        # Асинхронно читаем файл изображения
+        import aiofiles
+        async with aiofiles.open(card_path, 'rb') as f:
+            photo_bytes = await f.read()
+
+        # Создаём BufferedInputFile из байтов
+        photo = BufferedInputFile(photo_bytes, filename=card_path.name)
 
         # Формируем подпись с названием и описанием
         caption = f"🌅 Ваша карта дня: {card_name}\n\n"

@@ -1,16 +1,16 @@
 """Обработчики команд для работы с картами Таро"""
 
 import logging
+import aiofiles
 from aiogram import Router, Bot
 from aiogram.filters import Command
-from aiogram.types import Message, FSInputFile
+from aiogram.types import Message, BufferedInputFile
 
 from database.db import get_user_deck, add_user
 from scheduler.daily_sender import (
     get_random_card_number,
     get_card_path,
     get_card_description,
-    DECK_NAMES
 )
 
 logger = logging.getLogger(__name__)
@@ -61,10 +61,14 @@ async def cmd_get_card(message: Message, bot: Bot):
             return
 
         # Получаем описание карты
-        card_name, card_desc = get_card_description(card_number)
+        card_name, card_desc = await get_card_description(card_number)
 
-        # Отправляем карту
-        photo = FSInputFile(card_path)
+        # Асинхронно читаем файл изображения
+        async with aiofiles.open(card_path, 'rb') as f:
+            photo_bytes = await f.read()
+
+        # Создаём BufferedInputFile из байтов
+        photo = BufferedInputFile(photo_bytes, filename=card_path.name)
 
         # Формируем подпись с названием и описанием
         caption = f"🔮 Ваша карта: {card_name}\n\n"
