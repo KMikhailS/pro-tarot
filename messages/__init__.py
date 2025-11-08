@@ -9,6 +9,8 @@ from .texts import (
     DECK_SET_SUCCESS,
     DAILY_ENABLED_TEXT,
     DAILY_DISABLED_TEXT,
+    CARD_CHOICE_TEXT,
+    CARD_CHOICE_TEXT_ONDEMAND,
 )
 
 __all__ = [
@@ -22,4 +24,6 @@ __all__ = [
     'DECK_SET_SUCCESS',
     'DAILY_ENABLED_TEXT',
     'DAILY_DISABLED_TEXT',
+    'CARD_CHOICE_TEXT',
+    'CARD_CHOICE_TEXT_ONDEMAND',
 ]

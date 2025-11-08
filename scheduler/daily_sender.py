@@ -124,67 +124,71 @@ async def get_card_description(card_number: int) -> tuple[str, str]:
 
 async def send_daily_card(bot: Bot, user_id: int, deck_type: str):
     """
-    Отправить карту дня одному пользователю.
+    Отправить предложение выбора карты дня одному пользователю.
+
+    Новая логика:
+    1. Генерируем 3 случайные карты
+    2. Показываем кнопки выбора
+    3. Пользователь нажимает - получает карту
 
     Args:
         bot: Экземпляр бота
         user_id: ID пользователя Telegram
         deck_type: Тип колоды ('alfons_mucha' или 'rider_waite')
     """
-    try:
-        # Выбираем случайную карту
-        card_number = get_random_card_number()
-        card_path = get_card_path(deck_type, card_number)
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+    from messages import CARD_CHOICE_TEXT
 
-        # Если карта не найдена, пробуем найти другую
-        max_attempts = 10
+    try:
+        # Генерируем 3 случайные уникальные карты
+        card_numbers = set()
+        max_attempts = 30
         attempt = 0
-        while card_path is None and attempt < max_attempts:
-            card_number = get_random_card_number()
-            card_path = get_card_path(deck_type, card_number)
+
+        while len(card_numbers) < 3 and attempt < max_attempts:
+            card_num = get_random_card_number()
+            # Проверяем, что карта существует
+            if get_card_path(deck_type, card_num) is not None:
+                card_numbers.add(card_num)
             attempt += 1
 
-        if card_path is None:
+        if len(card_numbers) < 3:
             logger.error(
-                f"Failed to find any valid card for user {user_id} "
-                f"with deck {deck_type} after {max_attempts} attempts"
+                f"Failed to generate 3 unique cards for user {user_id} "
+                f"with deck {deck_type}"
             )
             return
 
-        # Получаем описание карты
-        card_name, card_desc = await get_card_description(card_number)
+        # Преобразуем в список для стабильного порядка
+        cards = list(card_numbers)
 
-        # Асинхронно читаем файл изображения
-        import aiofiles
-        async with aiofiles.open(card_path, 'rb') as f:
-            photo_bytes = await f.read()
+        # Формируем callback_data с номерами карт
+        # Формат: card:daily:<user_id>:<card0>:<card1>:<card2>:<selected>
+        keyboard = InlineKeyboardBuilder()
 
-        # Создаём BufferedInputFile из байтов
-        photo = BufferedInputFile(photo_bytes, filename=card_path.name)
+        for i in range(3):
+            callback_data = f"card:daily:{user_id}:{cards[0]}:{cards[1]}:{cards[2]}:{i}"
+            keyboard.button(
+                text=f"🎴 Карта {i + 1}",
+                callback_data=callback_data
+            )
 
-        # Формируем подпись с названием и описанием
-        caption = f"🌅 Ваша карта дня: {card_name}\n\n"
-        if card_desc:
-            caption += f"{card_desc}"
+        keyboard.adjust(1)  # По 1 кнопке в строку (вертикально)
 
-        await bot.send_photo(
+        await bot.send_message(
             chat_id=user_id,
-            photo=photo,
-            caption=caption,
-            parse_mode='HTML'
+            text=CARD_CHOICE_TEXT,
+            reply_markup=keyboard.as_markup()
         )
 
-        # Отмечаем отправку в БД
-        await mark_daily_card_sent(user_id)
-
         logger.info(
-            f"Daily card sent to user {user_id}: "
-            f"card={card_number}, deck={deck_type}"
+            f"Card choice sent to user {user_id}: "
+            f"cards={cards}, deck={deck_type}"
         )
 
     except Exception as e:
         logger.error(
-            f"Failed to send daily card to user {user_id}: {e}",
+            f"Failed to send card choice to user {user_id}: {e}",
             exc_info=True
         )
 

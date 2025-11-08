@@ -205,3 +205,30 @@ async def mark_daily_card_sent(user_id: int):
             (today, user_id)
         )
         await db.commit()
+
+
+async def can_receive_daily_card(user_id: int) -> bool:
+    """
+    Проверить, может ли пользователь получить карту дня сегодня.
+
+    Args:
+        user_id: ID пользователя
+
+    Returns:
+        True если пользователь еще не получал карту сегодня
+    """
+    today = date.today().isoformat()
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            """SELECT last_daily_card_date FROM users
+               WHERE user_id = ?""",
+            (user_id,)
+        ) as cursor:
+            row = await cursor.fetchone()
+            if not row:
+                return True
+
+            last_date = row[0]
+            # Если last_daily_card_date NULL или не сегодня - можно получить
+            return last_date is None or last_date != today
