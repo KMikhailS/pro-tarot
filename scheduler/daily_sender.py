@@ -19,8 +19,7 @@ logger = logging.getLogger(__name__)
 # Константы для работы с картами
 CARDS_BASE_DIR = Path("cards/images")
 CARDS_DESC_DIR = Path("cards/description")
-# TOTAL_CARDS = 78  # Карты нумеруются от 0 до 77 (всего 78 карт Таро)
-TOTAL_CARDS = 21  # Карты нумеруются от 0 до 77 (всего 78 карт Таро)
+TOTAL_CARDS = 78  # Карты нумеруются от 0 до 77 (всего 78 карт Таро)
 
 # Маппинг типов колод на папки
 DECK_FOLDERS = {
