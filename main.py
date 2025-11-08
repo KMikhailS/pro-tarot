@@ -10,7 +10,7 @@ from dotenv import load_dotenv, find_dotenv
 from messages import ABOUT_TEXT
 from database.db import init_db, add_user
 from handlers import settings, cards
-from scheduler.daily_sender import start_daily_sender
+from scheduler.daily_sender import start_daily_sender_apscheduler
 
 # Настройка логирования
 logging.basicConfig(
@@ -54,13 +54,19 @@ async def main():
     dp.include_router(settings.router)
     dp.include_router(cards.router)
 
-    # Запуск планировщика в фоне
-    start_daily_sender(bot)
-    logger.info("Daily sender started")
+    # Запуск APScheduler для ежедневных карт
+    scheduler = start_daily_sender_apscheduler(bot)
+    logger.info("APScheduler daily sender initialized")
 
-    # Запускаем polling
-    logger.info("Bot is running...")
-    await dp.start_polling(bot)
+    try:
+        # Запускаем polling
+        logger.info("Bot is running...")
+        await dp.start_polling(bot)
+    finally:
+        # Graceful shutdown планировщика
+        logger.info("Shutting down APScheduler...")
+        scheduler.shutdown(wait=True)
+        logger.info("APScheduler shut down successfully")
 
 
 if __name__ == "__main__":

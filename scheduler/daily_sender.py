@@ -9,6 +9,8 @@ from typing import Optional
 
 from aiogram import Bot
 from aiogram.types import BufferedInputFile
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 from database.db import get_users_for_daily_send, mark_daily_card_sent
 
@@ -272,3 +274,66 @@ def start_daily_sender(bot: Bot):
     """
     logger.info("Starting daily sender task")
     return asyncio.create_task(daily_sender_loop(bot))
+
+
+async def scheduled_daily_cards_job(bot: Bot):
+    """
+    APScheduler job для отправки ежедневных карт.
+    Вызывается каждый час по расписанию.
+
+    Args:
+        bot: Экземпляр бота
+    """
+    try:
+        utc_hour = datetime.utcnow().hour
+        logger.info(
+            f"APScheduler triggered daily cards sending for UTC hour {utc_hour}"
+        )
+        await process_daily_cards(bot, utc_hour)
+    except Exception as e:
+        logger.error(
+            f"Error in scheduled daily cards job: {e}",
+            exc_info=True
+        )
+
+
+def start_daily_sender_apscheduler(bot: Bot) -> AsyncIOScheduler:
+    """
+    Запустить планировщик отправки карт с использованием APScheduler.
+
+    Планировщик выполняет отправку каждый час в 0 минут (UTC).
+
+    Args:
+        bot: Экземпляр бота для отправки сообщений
+
+    Returns:
+        AsyncIOScheduler instance для возможности graceful shutdown
+
+    Example:
+        >>> scheduler = start_daily_sender_apscheduler(bot)
+        >>> # Бот работает...
+        >>> scheduler.shutdown(wait=True)  # При остановке
+    """
+    scheduler = AsyncIOScheduler(timezone='UTC')
+
+    # Добавляем задачу: каждый час в 0 минут
+    scheduler.add_job(
+        scheduled_daily_cards_job,
+        trigger=CronTrigger(minute=0, timezone='UTC'),
+        args=[bot],
+        id='daily_cards_sender',
+        name='Send daily tarot cards to subscribed users',
+        max_instances=1,  # Предотвращаем параллельное выполнение
+        replace_existing=True,
+        misfire_grace_time=120,  # Если пропустили, выполнить в течение 2 минут
+        coalesce=True  # Объединить пропущенные запуски в один
+    )
+
+    scheduler.start()
+
+    logger.info(
+        "APScheduler started for daily cards sending "
+        "(schedule: every hour at minute 0, UTC)"
+    )
+
+    return scheduler
