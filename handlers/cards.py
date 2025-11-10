@@ -8,7 +8,7 @@ from aiogram.filters import Command
 from aiogram.types import Message, BufferedInputFile, CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from database.db import get_user_deck, add_user, mark_daily_card_sent, can_receive_daily_card
+from database.db import get_user_deck, add_user, mark_daily_card_sent, can_receive_daily_card, get_user_role
 from scheduler.daily_sender import (
     get_random_card_number,
     get_card_path,
@@ -227,6 +227,8 @@ async def cmd_get_card(message: Message, bot: Bot):
 
     В отличие от автоматической отправки, эта команда не обновляет
     last_daily_card_date, чтобы не мешать запланированной отправке.
+
+    Команда доступна только пользователям с ролью ADMIN.
     """
     # Убеждаемся, что пользователь есть в БД
     await add_user(
@@ -234,6 +236,12 @@ async def cmd_get_card(message: Message, bot: Bot):
         message.from_user.username,
         message.from_user.first_name
     )
+
+    # Проверяем роль пользователя
+    user_role = await get_user_role(message.from_user.id)
+    if user_role != 'ADMIN':
+        # Пропускаем выполнение команды без уведомления пользователя
+        return
 
     # Получаем тип колоды пользователя
     deck_type = await get_user_deck(message.from_user.id)

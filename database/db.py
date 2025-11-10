@@ -43,11 +43,12 @@ async def add_user(user_id: int, username: Optional[str], first_name: Optional[s
     - timezone_offset = 180 (GMT+3)
     - deck_type = 'alfons_mucha' (Колода Альфонса Мухи)
     - send_hour = 8 (08:00)
+    - role = 'USER'
     """
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
-            """INSERT INTO users (user_id, username, first_name, created_at, daily_card_enabled, timezone_offset, deck_type, send_hour)
-               VALUES (?, ?, ?, ?, 1, 180, 'alfons_mucha', 8)
+            """INSERT INTO users (user_id, username, first_name, created_at, daily_card_enabled, timezone_offset, deck_type, send_hour, role)
+               VALUES (?, ?, ?, ?, 1, 180, 'alfons_mucha', 8, 'USER')
                ON CONFLICT(user_id) DO UPDATE SET
                    username = excluded.username,
                    first_name = excluded.first_name""",
@@ -232,3 +233,22 @@ async def can_receive_daily_card(user_id: int) -> bool:
             last_date = row[0]
             # Если last_daily_card_date NULL или не сегодня - можно получить
             return last_date is None or last_date != today
+
+
+async def get_user_role(user_id: int) -> Optional[str]:
+    """
+    Получить роль пользователя.
+
+    Args:
+        user_id: ID пользователя
+
+    Returns:
+        Роль пользователя или None если пользователь не найден
+    """
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT role FROM users WHERE user_id = ?",
+            (user_id,)
+        ) as cursor:
+            row = await cursor.fetchone()
+            return row[0] if row else None

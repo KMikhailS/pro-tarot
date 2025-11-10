@@ -20,13 +20,8 @@ from messages import (
     SETTINGS_TEXT,
     TIME_SELECTION_TEXT,
     DECK_SELECTION_TEXT,
-    TIME_SET_SUCCESS,
-    DECK_SET_SUCCESS,
-    DAILY_ENABLED_TEXT,
-    DAILY_DISABLED_TEXT,
     ABOUT_TEXT,
-    TIMEZONE_SELECTION_TEXT,
-    TIMEZONE_SET_SUCCESS
+    TIMEZONE_SELECTION_TEXT
 )
 
 router = Router()
@@ -206,16 +201,46 @@ async def callback_daily_toggle(callback: CallbackQuery):
     """Переключить статус ежедневной карты"""
     new_status = await toggle_daily_card(callback.from_user.id)
 
-    if new_status:
-        text = DAILY_ENABLED_TEXT
-    else:
-        text = DAILY_DISABLED_TEXT
+    # Сразу возвращаемся в меню настроек
+    settings = await get_user_settings(callback.from_user.id)
+
+    daily_status = "✅ Включено" if settings and settings['daily_card_enabled'] else "❌ Выключено"
+    send_hour = settings['send_hour'] if settings and settings['send_hour'] is not None else "Не установлено"
+    if isinstance(send_hour, int):
+        send_hour = f"{send_hour:02d}:00"
+
+    deck_names = {
+        'alfons_mucha': '🎴 Колода Альфонса Мухи',
+        'rider_waite': '🎴 Колода Райдера-Уэйта'
+    }
+    deck_type = deck_names.get(settings['deck_type'], '🎴 Колода Райдера-Уэйта') if settings else '🎴 Колода Райдера-Уэйта'
+
+    timezone_offset = settings['timezone_offset'] if settings else 180
+    timezone = format_timezone(timezone_offset)
+
+    text = SETTINGS_TEXT.format(
+        daily_status=daily_status,
+        send_hour=send_hour,
+        deck_type=deck_type,
+        timezone=timezone
+    )
+
+    daily_enabled = settings and settings['daily_card_enabled']
+    toggle_button_text = "❌ Выключить карту дня" if daily_enabled else "✅ Включить карту дня"
 
     keyboard = InlineKeyboardBuilder()
-    keyboard.button(text="🔙 Назад в настройки", callback_data="settings:main")
+    keyboard.button(text="🎴 Выбор колоды", callback_data="settings:deck")
+    keyboard.button(text=toggle_button_text, callback_data="settings:daily_toggle")
+    keyboard.button(text="⏰ Время отправки", callback_data="settings:time")
+    keyboard.button(text="🌍 Часовой пояс", callback_data="settings:timezone")
+    keyboard.button(text="🔙 Главное меню", callback_data="menu:main")
+    keyboard.adjust(1)
 
     await callback.message.edit_text(text, reply_markup=keyboard.as_markup())
-    await callback.answer()
+
+    # Показываем всплывающее уведомление
+    status_text = "Карта дня включена!" if new_status else "Карта дня выключена!"
+    await callback.answer(status_text)
 
 
 # ============== Выбор времени отправки (только час) ==============
@@ -251,10 +276,40 @@ async def callback_time_select(callback: CallbackQuery):
 
     await update_user_send_hour(callback.from_user.id, hour)
 
-    text = TIME_SET_SUCCESS.format(hour=f"{hour:02d}:00")
+    # Сразу возвращаемся в меню настроек
+    settings = await get_user_settings(callback.from_user.id)
+
+    daily_status = "✅ Включено" if settings and settings['daily_card_enabled'] else "❌ Выключено"
+    send_hour = settings['send_hour'] if settings and settings['send_hour'] is not None else "Не установлено"
+    if isinstance(send_hour, int):
+        send_hour = f"{send_hour:02d}:00"
+
+    deck_names = {
+        'alfons_mucha': '🎴 Колода Альфонса Мухи',
+        'rider_waite': '🎴 Колода Райдера-Уэйта'
+    }
+    deck_type = deck_names.get(settings['deck_type'], '🎴 Колода Райдера-Уэйта') if settings else '🎴 Колода Райдера-Уэйта'
+
+    timezone_offset = settings['timezone_offset'] if settings else 180
+    timezone = format_timezone(timezone_offset)
+
+    text = SETTINGS_TEXT.format(
+        daily_status=daily_status,
+        send_hour=send_hour,
+        deck_type=deck_type,
+        timezone=timezone
+    )
+
+    daily_enabled = settings and settings['daily_card_enabled']
+    toggle_button_text = "❌ Выключить карту дня" if daily_enabled else "✅ Включить карту дня"
 
     keyboard = InlineKeyboardBuilder()
-    keyboard.button(text="🔙 Назад в настройки", callback_data="settings:main")
+    keyboard.button(text="🎴 Выбор колоды", callback_data="settings:deck")
+    keyboard.button(text=toggle_button_text, callback_data="settings:daily_toggle")
+    keyboard.button(text="⏰ Время отправки", callback_data="settings:time")
+    keyboard.button(text="🌍 Часовой пояс", callback_data="settings:timezone")
+    keyboard.button(text="🔙 Главное меню", callback_data="menu:main")
+    keyboard.adjust(1)
 
     await callback.message.edit_text(text, reply_markup=keyboard.as_markup())
     await callback.answer("Время установлено!")
@@ -327,11 +382,40 @@ async def callback_timezone_set(callback: CallbackQuery):
     if -720 <= timezone_offset <= 840:
         await update_user_timezone(callback.from_user.id, timezone_offset)
 
-        timezone_str = format_timezone(timezone_offset)
-        text = TIMEZONE_SET_SUCCESS.format(timezone=timezone_str)
+        # Сразу возвращаемся в меню настроек
+        settings = await get_user_settings(callback.from_user.id)
+
+        daily_status = "✅ Включено" if settings and settings['daily_card_enabled'] else "❌ Выключено"
+        send_hour = settings['send_hour'] if settings and settings['send_hour'] is not None else "Не установлено"
+        if isinstance(send_hour, int):
+            send_hour = f"{send_hour:02d}:00"
+
+        deck_names = {
+            'alfons_mucha': '🎴 Колода Альфонса Мухи',
+            'rider_waite': '🎴 Колода Райдера-Уэйта'
+        }
+        deck_type = deck_names.get(settings['deck_type'], '🎴 Колода Райдера-Уэйта') if settings else '🎴 Колода Райдера-Уэйта'
+
+        timezone_offset_saved = settings['timezone_offset'] if settings else 180
+        timezone = format_timezone(timezone_offset_saved)
+
+        text = SETTINGS_TEXT.format(
+            daily_status=daily_status,
+            send_hour=send_hour,
+            deck_type=deck_type,
+            timezone=timezone
+        )
+
+        daily_enabled = settings and settings['daily_card_enabled']
+        toggle_button_text = "❌ Выключить карту дня" if daily_enabled else "✅ Включить карту дня"
 
         keyboard = InlineKeyboardBuilder()
-        keyboard.button(text="🔙 Назад в настройки", callback_data="settings:main")
+        keyboard.button(text="🎴 Выбор колоды", callback_data="settings:deck")
+        keyboard.button(text=toggle_button_text, callback_data="settings:daily_toggle")
+        keyboard.button(text="⏰ Время отправки", callback_data="settings:time")
+        keyboard.button(text="🌍 Часовой пояс", callback_data="settings:timezone")
+        keyboard.button(text="🔙 Главное меню", callback_data="menu:main")
+        keyboard.adjust(1)
 
         await callback.message.edit_text(text, reply_markup=keyboard.as_markup())
         await callback.answer("Часовой пояс установлен!")
@@ -373,15 +457,40 @@ async def callback_deck_select(callback: CallbackQuery):
 
     await update_user_deck(callback.from_user.id, deck_type)
 
-    deck_names = {
-        'alfons_mucha': 'Колода Альфонса Мухи',
-        'rider_waite': 'Колода Райдера-Уэйта',
-    }
+    # Сразу возвращаемся в меню настроек
+    settings = await get_user_settings(callback.from_user.id)
 
-    text = DECK_SET_SUCCESS.format(deck_name=deck_names[deck_type])
+    daily_status = "✅ Включено" if settings and settings['daily_card_enabled'] else "❌ Выключено"
+    send_hour = settings['send_hour'] if settings and settings['send_hour'] is not None else "Не установлено"
+    if isinstance(send_hour, int):
+        send_hour = f"{send_hour:02d}:00"
+
+    deck_names = {
+        'alfons_mucha': '🎴 Колода Альфонса Мухи',
+        'rider_waite': '🎴 Колода Райдера-Уэйта'
+    }
+    deck_type_display = deck_names.get(settings['deck_type'], '🎴 Колода Райдера-Уэйта') if settings else '🎴 Колода Райдера-Уэйта'
+
+    timezone_offset = settings['timezone_offset'] if settings else 180
+    timezone = format_timezone(timezone_offset)
+
+    text = SETTINGS_TEXT.format(
+        daily_status=daily_status,
+        send_hour=send_hour,
+        deck_type=deck_type_display,
+        timezone=timezone
+    )
+
+    daily_enabled = settings and settings['daily_card_enabled']
+    toggle_button_text = "❌ Выключить карту дня" if daily_enabled else "✅ Включить карту дня"
 
     keyboard = InlineKeyboardBuilder()
-    keyboard.button(text="🔙 Назад в настройки", callback_data="settings:main")
+    keyboard.button(text="🎴 Выбор колоды", callback_data="settings:deck")
+    keyboard.button(text=toggle_button_text, callback_data="settings:daily_toggle")
+    keyboard.button(text="⏰ Время отправки", callback_data="settings:time")
+    keyboard.button(text="🌍 Часовой пояс", callback_data="settings:timezone")
+    keyboard.button(text="🔙 Главное меню", callback_data="menu:main")
+    keyboard.adjust(1)
 
     await callback.message.edit_text(text, reply_markup=keyboard.as_markup())
     await callback.answer("Колода выбрана!")
