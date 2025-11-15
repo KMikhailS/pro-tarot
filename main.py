@@ -9,7 +9,7 @@ from dotenv import load_dotenv, find_dotenv
 
 from messages import ABOUT_TEXT
 from database.db import init_db, add_user
-from handlers import settings, cards
+from handlers import settings, cards, ai_answer
 from scheduler.daily_sender import start_daily_sender_apscheduler
 
 # Настройка логирования
@@ -53,6 +53,7 @@ async def main():
     dp.include_router(router)
     dp.include_router(settings.router)
     dp.include_router(cards.router)
+    dp.include_router(ai_answer.router)
 
     # Запуск APScheduler для ежедневных карт
     scheduler = start_daily_sender_apscheduler(bot)
