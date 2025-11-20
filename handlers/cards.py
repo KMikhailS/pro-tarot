@@ -280,7 +280,7 @@ async def cmd_get_card(message: Message, bot: Bot):
         for i in range(3):
             callback_data = f"card:ondemand:{message.from_user.id}:{cards[0]}:{cards[1]}:{cards[2]}:{i}"
             keyboard.button(
-                text=f"🎴 Карта {i + 1}",
+                text=f"✨ Карта {i + 1}",
                 callback_data=callback_data
             )
 
@@ -303,4 +303,97 @@ async def cmd_get_card(message: Message, bot: Bot):
         )
         await message.answer(
             "😔 Произошла ошибка при отправке карты. Попробуйте позже."
+        )
+
+
+@router.callback_query(F.data == "start:get_card")
+async def callback_start_get_card(callback: CallbackQuery, bot: Bot):
+    """
+    Обработчик нажатия на кнопку 'Получить карту дня' в /start.
+    Вызывает функционал команды /get_card.
+    """
+    # Убеждаемся, что пользователь есть в БД
+    await add_user(
+        callback.from_user.id,
+        callback.from_user.username,
+        callback.from_user.first_name
+    )
+
+    # Проверяем роль пользователя
+    user_role = await get_user_role(callback.from_user.id)
+    if user_role != 'ADMIN':
+        # Для обычных пользователей проверяем, можно ли получить карту дня
+        if not await can_receive_daily_card(callback.from_user.id):
+            await callback.answer(
+                "Вы уже получили карту дня сегодня!",
+                show_alert=True
+            )
+            return
+
+    # Получаем тип колоды пользователя
+    deck_type = await get_user_deck(callback.from_user.id)
+
+    try:
+        # Генерируем 3 случайные уникальные карты
+        card_numbers = set()
+        max_attempts = 30
+        attempt = 0
+
+        while len(card_numbers) < 3 and attempt < max_attempts:
+            card_num = get_random_card_number()
+            # Проверяем, что карта существует
+            if get_card_path(deck_type, card_num) is not None:
+                card_numbers.add(card_num)
+            attempt += 1
+
+        if len(card_numbers) < 3:
+            logger.error(
+                f"Failed to generate 3 unique cards for user {callback.from_user.id} "
+                f"with deck {deck_type}"
+            )
+            await callback.answer(
+                "😔 Не удалось сгенерировать карты. Попробуйте выбрать другую колоду в /settings",
+                show_alert=True
+            )
+            return
+
+        # Преобразуем в список для стабильного порядка
+        cards = list(card_numbers)
+
+        # Формируем callback_data с номерами карт
+        # Для обычных пользователей используем daily, для ADMIN - ondemand
+        # Формат: card:daily/ondemand:<user_id>:<card0>:<card1>:<card2>:<selected>
+        keyboard = InlineKeyboardBuilder()
+
+        card_type = "daily" if user_role != 'ADMIN' else "ondemand"
+
+        for i in range(3):
+            callback_data = f"card:{card_type}:{callback.from_user.id}:{cards[0]}:{cards[1]}:{cards[2]}:{i}"
+            keyboard.button(
+                text=f"✨ Карта {i + 1}",
+                callback_data=callback_data
+            )
+
+        keyboard.adjust(1)  # По 1 кнопке в строку (вертикально)
+
+        await callback.message.answer(
+            CARD_CHOICE_TEXT_ONDEMAND,
+            reply_markup=keyboard.as_markup()
+        )
+
+        await callback.answer()
+
+        logger.info(
+            f"Card choice sent to user {callback.from_user.id} via start button: "
+            f"cards={cards}, deck={deck_type}"
+        )
+
+    except Exception as e:
+        logger.error(
+            f"Failed to send card choice to user {callback.from_user.id}: {e}",
+            exc_info=True
+        )
+        await callback.answer(
+            "😔 Произошла ошибка при отправке карты. Попробуйте позже.",
+            show_alert=True
         )

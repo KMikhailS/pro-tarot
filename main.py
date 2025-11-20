@@ -2,9 +2,11 @@ import asyncio
 import os
 import logging
 
+import aiofiles
 from aiogram import Bot, Dispatcher, Router
 from aiogram.filters import CommandStart
-from aiogram.types import Message
+from aiogram.types import Message, BufferedInputFile
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 from dotenv import load_dotenv, find_dotenv
 
 from messages import ABOUT_TEXT
@@ -35,7 +37,30 @@ async def cmd_start(message: Message):
         message.from_user.username,
         message.from_user.first_name
     )
-    await message.answer(ABOUT_TEXT)
+
+    # Создаём inline клавиатуру с двумя кнопками
+    keyboard = InlineKeyboardBuilder()
+    keyboard.button(
+        text="🌅 Получить карту дня",
+        callback_data="start:get_card"
+    )
+    keyboard.button(
+        text="⚙️ Настройки",
+        callback_data="settings:main"
+    )
+    keyboard.adjust(1)  # По 1 кнопке в строку
+
+    # Асинхронно читаем файл картинки
+    async with aiofiles.open("images/main.png", "rb") as image_file:
+        image_data = await image_file.read()
+
+    # Отправляем фото с приветственным текстом
+    photo = BufferedInputFile(image_data, filename="main.png")
+    await message.answer_photo(
+        photo=photo,
+        caption=ABOUT_TEXT,
+        reply_markup=keyboard.as_markup()
+    )
 
 
 async def main():
