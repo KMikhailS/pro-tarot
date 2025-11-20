@@ -1,10 +1,12 @@
 """Обработчик команды /settings и управление настройками"""
 
-from aiogram import Router, F
+from aiogram import Router, F, Bot
 from aiogram.filters import Command
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, BufferedInputFile
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from datetime import datetime, timedelta
+import aiofiles
+import logging
 
 from database.db import (
     add_user,
@@ -23,8 +25,10 @@ from messages import (
     ABOUT_TEXT,
     TIMEZONE_SELECTION_TEXT
 )
+from utils.image_cache import get_cached_image
 
 router = Router()
+logger = logging.getLogger(__name__)
 
 
 def format_timezone(offset_minutes: int) -> str:
@@ -146,12 +150,17 @@ async def callback_settings_main(callback: CallbackQuery):
     keyboard.button(text="🔙 Главное меню", callback_data="menu:main")
     keyboard.adjust(1)
 
-    await callback.message.edit_text(text, reply_markup=keyboard.as_markup())
+    # Если сообщение содержит фото, удаляем его и отправляем новое
+    if callback.message.photo:
+        await callback.message.delete()
+        await callback.message.answer(text, reply_markup=keyboard.as_markup())
+    else:
+        await callback.message.edit_text(text, reply_markup=keyboard.as_markup())
     await callback.answer()
 
 
 @router.callback_query(F.data == "menu:main")
-async def callback_main_menu(callback: CallbackQuery):
+async def callback_main_menu(callback: CallbackQuery, bot: Bot):
     """Вернуться в главное меню бота"""
     # Создаём inline клавиатуру с двумя кнопками
     keyboard = InlineKeyboardBuilder()
@@ -165,7 +174,26 @@ async def callback_main_menu(callback: CallbackQuery):
     )
     keyboard.adjust(1)  # По 1 кнопке в строку
 
-    await callback.message.edit_text(ABOUT_TEXT, reply_markup=keyboard.as_markup())
+    # Удаляем текущее сообщение (текстовое или с фото)
+    await callback.message.delete()
+
+    # Получаем кэшированное изображение
+    image_data = get_cached_image()
+
+    if image_data is None:
+        # Fallback: если кэш отсутствует, загружаем напрямую
+        logger.warning("Image cache miss in menu:main callback")
+        async with aiofiles.open("images/main.png", "rb") as image_file:
+            image_data = await image_file.read()
+
+    # Отправляем новое сообщение с фото, как в /start
+    photo = BufferedInputFile(image_data, filename="main.png")
+    await callback.message.answer_photo(
+        photo=photo,
+        caption=ABOUT_TEXT,
+        reply_markup=keyboard.as_markup()
+    )
+
     await callback.answer()
 
 

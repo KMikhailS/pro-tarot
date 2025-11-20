@@ -13,6 +13,7 @@ from messages import ABOUT_TEXT
 from database.db import init_db, add_user
 from handlers import settings, cards, ai_answer
 from scheduler.daily_sender import start_daily_sender_apscheduler
+from utils.image_cache import load_main_image, get_cached_image
 
 # Настройка логирования
 logging.basicConfig(
@@ -29,7 +30,7 @@ router = Router()
 
 
 @router.message(CommandStart())
-async def cmd_start(message: Message):
+async def cmd_start(message: Message, bot: Bot):
     """Обработчик команды /start"""
     # Сохраняем пользователя в БД
     await add_user(
@@ -50,9 +51,14 @@ async def cmd_start(message: Message):
     )
     keyboard.adjust(1)  # По 1 кнопке в строку
 
-    # Асинхронно читаем файл картинки
-    async with aiofiles.open("images/main.png", "rb") as image_file:
-        image_data = await image_file.read()
+    # Получаем кэшированное изображение
+    image_data = get_cached_image()
+
+    if image_data is None:
+        # Fallback: если кэш отсутствует, загружаем напрямую
+        logger.warning("Image cache miss in /start handler")
+        async with aiofiles.open("images/main.png", "rb") as image_file:
+            image_data = await image_file.read()
 
     # Отправляем фото с приветственным текстом
     photo = BufferedInputFile(image_data, filename="main.png")
@@ -73,6 +79,13 @@ async def main():
 
     bot = Bot(token=BOT_TOKEN)
     dp = Dispatcher()
+
+    # Загружаем изображение в кэш перед стартом
+    main_image = await load_main_image()
+    if main_image:
+        logger.info("Main image cached successfully")
+    else:
+        logger.warning("Failed to cache main image, handlers will use fallback")
 
     # Регистрируем роутеры
     dp.include_router(router)
