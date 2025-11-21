@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import random
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -32,6 +32,9 @@ DECK_NAMES = {
     'alfons_mucha': 'Колода Альфонса Мухи',
     'rider_waite': 'Колода Райдера-Уэйта',
 }
+
+# Кэш для описаний карт: {card_number: (название, описание)}
+_card_descriptions_cache: dict[int, tuple[str, str]] = {}
 
 
 def get_card_path(deck_type: str, card_number: int) -> Optional[Path]:
@@ -65,6 +68,40 @@ def get_random_card_number() -> int:
     return random.randint(0, TOTAL_CARDS - 1)
 
 
+def generate_unique_cards(deck_type: str, count: int = 3) -> list[int]:
+    """
+    Генерирует список уникальных номеров карт для указанной колоды.
+
+    Оптимизированная версия: сначала собирает список всех доступных карт,
+    затем выбирает случайные из них. Это намного быстрее, чем проверка
+    существования файла в цикле.
+
+    Args:
+        deck_type: Тип колоды ('alfons_mucha' или 'rider_waite')
+        count: Количество карт для генерации (по умолчанию 3)
+
+    Returns:
+        Список уникальных номеров карт
+
+    Raises:
+        ValueError: Если недостаточно доступных карт в колоде
+    """
+    # Собираем список всех доступных карт для данной колоды
+    available_cards = [
+        i for i in range(TOTAL_CARDS)
+        if get_card_path(deck_type, i) is not None
+    ]
+
+    if len(available_cards) < count:
+        raise ValueError(
+            f"Not enough cards available for deck {deck_type}: "
+            f"required {count}, found {len(available_cards)}"
+        )
+
+    # Используем random.sample для эффективного выбора уникальных карт
+    return random.sample(available_cards, count)
+
+
 def markdown_to_html(text: str) -> str:
     """
     Конвертирует Markdown разметку в HTML для Telegram.
@@ -81,9 +118,46 @@ def markdown_to_html(text: str) -> str:
     return text
 
 
+async def preload_card_descriptions():
+    """
+    Предзагрузить все описания карт в кэш при старте бота.
+
+    Это значительно ускоряет отправку карт, так как не нужно
+    читать файлы с диска каждый раз.
+    """
+    logger.info("Preloading card descriptions into cache...")
+
+    loaded_count = 0
+    for card_number in range(TOTAL_CARDS):
+        desc_path = CARDS_DESC_DIR / f"{card_number}.txt"
+
+        if desc_path.exists():
+            try:
+                import aiofiles
+                async with aiofiles.open(desc_path, 'r', encoding='utf-8') as f:
+                    content = await f.read()
+
+                lines = content.strip().split('\n')
+                if len(lines) >= 2:
+                    card_name = lines[0].strip()
+                    card_description = '\n'.join(lines[1:]).strip()
+                    card_description_html = markdown_to_html(card_description)
+
+                    _card_descriptions_cache[card_number] = (card_name, card_description_html)
+                    loaded_count += 1
+            except Exception as e:
+                logger.warning(f"Failed to load description for card {card_number}: {e}")
+        else:
+            logger.debug(f"Description file not found for card {card_number}")
+
+    logger.info(f"Preloaded {loaded_count} card descriptions into cache")
+
+
 async def get_card_description(card_number: int) -> tuple[str, str]:
     """
-    Асинхронно получить название и описание карты из файла.
+    Получить название и описание карты.
+
+    Сначала проверяет кэш, затем читает файл если описание не найдено.
 
     Args:
         card_number: Номер карты (0-77)
@@ -91,8 +165,14 @@ async def get_card_description(card_number: int) -> tuple[str, str]:
     Returns:
         Кортеж (название, полное описание с HTML разметкой)
     """
-    import aiofiles
+    # Проверяем кэш
+    if card_number in _card_descriptions_cache:
+        return _card_descriptions_cache[card_number]
 
+    # Если не в кэше, читаем из файла (fallback)
+    logger.debug(f"Cache miss for card {card_number}, reading from file")
+
+    import aiofiles
     desc_path = CARDS_DESC_DIR / f"{card_number}.txt"
 
     try:
@@ -112,6 +192,9 @@ async def get_card_description(card_number: int) -> tuple[str, str]:
 
             # Конвертируем Markdown в HTML
             card_desc = markdown_to_html(card_desc)
+
+            # Сохраняем в кэш для будущего использования
+            _card_descriptions_cache[card_number] = (card_name, card_desc)
 
             return card_name, card_desc
     except FileNotFoundError:
@@ -141,26 +224,13 @@ async def send_daily_card(bot: Bot, user_id: int, deck_type: str):
 
     try:
         # Генерируем 3 случайные уникальные карты
-        card_numbers = set()
-        max_attempts = 30
-        attempt = 0
-
-        while len(card_numbers) < 3 and attempt < max_attempts:
-            card_num = get_random_card_number()
-            # Проверяем, что карта существует
-            if get_card_path(deck_type, card_num) is not None:
-                card_numbers.add(card_num)
-            attempt += 1
-
-        if len(card_numbers) < 3:
+        try:
+            cards = generate_unique_cards(deck_type, count=3)
+        except ValueError as e:
             logger.error(
-                f"Failed to generate 3 unique cards for user {user_id} "
-                f"with deck {deck_type}"
+                f"Failed to generate cards for user {user_id}: {e}"
             )
             return
-
-        # Преобразуем в список для стабильного порядка
-        cards = list(card_numbers)
 
         # Формируем callback_data с номерами карт
         # Формат: card:daily:<user_id>:<card0>:<card1>:<card2>:<selected>
@@ -169,7 +239,7 @@ async def send_daily_card(bot: Bot, user_id: int, deck_type: str):
         for i in range(3):
             callback_data = f"card:daily:{user_id}:{cards[0]}:{cards[1]}:{cards[2]}:{i}"
             keyboard.button(
-                text=f"🎴 Карта {i + 1}",
+                text=f"✨ Карта {i + 1}",
                 callback_data=callback_data
             )
 
@@ -213,12 +283,15 @@ async def process_daily_cards(bot: Bot, utc_hour: int):
         f"Found {len(users)} users to send daily card at UTC hour {utc_hour}"
     )
 
-    # Отправляем карты параллельно
-    tasks = [
-        send_daily_card(bot, user['user_id'], user['deck_type'])
-        for user in users
-    ]
+    # Отправляем карты с rate limiting (максимум 20 параллельных запросов)
+    # Это предотвращает превышение лимитов Telegram API (30 сообщений/сек)
+    semaphore = asyncio.Semaphore(20)
 
+    async def send_with_limit(user):
+        async with semaphore:
+            return await send_daily_card(bot, user['user_id'], user['deck_type'])
+
+    tasks = [send_with_limit(user) for user in users]
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
     # Логируем ошибки, если они были
@@ -243,7 +316,7 @@ async def daily_sender_loop(bot: Bot):
 
     while True:
         try:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             current_hour = now.hour
             current_minute = now.minute
 
@@ -288,7 +361,7 @@ async def scheduled_daily_cards_job(bot: Bot):
         bot: Экземпляр бота
     """
     try:
-        utc_hour = datetime.utcnow().hour
+        utc_hour = datetime.now(timezone.utc).hour
         logger.info(
             f"APScheduler triggered daily cards sending for UTC hour {utc_hour}"
         )

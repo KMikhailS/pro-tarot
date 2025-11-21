@@ -12,7 +12,7 @@ from dotenv import load_dotenv, find_dotenv
 from messages import ABOUT_TEXT
 from database.db import init_db, add_user
 from handlers import settings, cards, ai_answer
-from scheduler.daily_sender import start_daily_sender_apscheduler
+from scheduler.daily_sender import start_daily_sender_apscheduler, preload_card_descriptions
 from utils.image_cache import load_main_image, get_cached_image
 
 # Настройка логирования
@@ -57,8 +57,23 @@ async def cmd_start(message: Message, bot: Bot):
     if image_data is None:
         # Fallback: если кэш отсутствует, загружаем напрямую
         logger.warning("Image cache miss in /start handler")
-        async with aiofiles.open("images/main.png", "rb") as image_file:
-            image_data = await image_file.read()
+        try:
+            async with aiofiles.open("images/main.png", "rb") as image_file:
+                image_data = await image_file.read()
+        except FileNotFoundError:
+            logger.error("Main image file not found at images/main.png")
+            await message.answer(
+                f"{ABOUT_TEXT}\n\n⚠️ Изображение временно недоступно.",
+                reply_markup=keyboard.as_markup()
+            )
+            return
+        except Exception as e:
+            logger.error(f"Error loading main image: {e}", exc_info=True)
+            await message.answer(
+                f"{ABOUT_TEXT}\n\n⚠️ Произошла ошибка при загрузке изображения.",
+                reply_markup=keyboard.as_markup()
+            )
+            return
 
     # Отправляем фото с приветственным текстом
     photo = BufferedInputFile(image_data, filename="main.png")
@@ -86,6 +101,9 @@ async def main():
         logger.info("Main image cached successfully")
     else:
         logger.warning("Failed to cache main image, handlers will use fallback")
+
+    # Предзагружаем описания карт в кэш
+    await preload_card_descriptions()
 
     # Регистрируем роутеры
     dp.include_router(router)

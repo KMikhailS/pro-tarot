@@ -20,7 +20,8 @@ async def init_db():
                 send_hour INTEGER,
                 timezone_offset INTEGER DEFAULT 0,
                 deck_type TEXT DEFAULT 'rider_waite',
-                last_daily_card_date TEXT
+                last_daily_card_date TEXT,
+                role VARCHAR(32) DEFAULT 'USER'
             )
         """)
 
@@ -30,6 +31,13 @@ async def init_db():
             ON users(daily_card_enabled, send_hour, last_daily_card_date)
             WHERE daily_card_enabled = 1
         """)
+
+        # Миграция: добавить поле role если его нет
+        async with db.execute("PRAGMA table_info(users)") as cursor:
+            columns = await cursor.fetchall()
+            column_names = [col[1] for col in columns]
+            if 'role' not in column_names:
+                await db.execute("ALTER TABLE users ADD COLUMN role VARCHAR(32) DEFAULT 'USER'")
 
         await db.commit()
 

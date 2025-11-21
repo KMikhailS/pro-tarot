@@ -13,6 +13,7 @@ from scheduler.daily_sender import (
     get_random_card_number,
     get_card_path,
     get_card_description,
+    generate_unique_cards,
 )
 from messages import CARD_CHOICE_TEXT_ONDEMAND
 
@@ -248,30 +249,17 @@ async def cmd_get_card(message: Message, bot: Bot):
 
     try:
         # Генерируем 3 случайные уникальные карты
-        card_numbers = set()
-        max_attempts = 30
-        attempt = 0
-
-        while len(card_numbers) < 3 and attempt < max_attempts:
-            card_num = get_random_card_number()
-            # Проверяем, что карта существует
-            if get_card_path(deck_type, card_num) is not None:
-                card_numbers.add(card_num)
-            attempt += 1
-
-        if len(card_numbers) < 3:
+        try:
+            cards = generate_unique_cards(deck_type, count=3)
+        except ValueError as e:
             logger.error(
-                f"Failed to generate 3 unique cards for user {message.from_user.id} "
-                f"with deck {deck_type}"
+                f"Failed to generate cards for user {message.from_user.id}: {e}"
             )
             await message.answer(
                 "😔 Извините, не удалось сгенерировать карты. "
                 "Попробуйте выбрать другую колоду в /settings"
             )
             return
-
-        # Преобразуем в список для стабильного порядка
-        cards = list(card_numbers)
 
         # Формируем callback_data с номерами карт
         # Формат: card:ondemand:<user_id>:<card0>:<card1>:<card2>:<selected>
@@ -335,30 +323,17 @@ async def callback_start_get_card(callback: CallbackQuery, bot: Bot):
 
     try:
         # Генерируем 3 случайные уникальные карты
-        card_numbers = set()
-        max_attempts = 30
-        attempt = 0
-
-        while len(card_numbers) < 3 and attempt < max_attempts:
-            card_num = get_random_card_number()
-            # Проверяем, что карта существует
-            if get_card_path(deck_type, card_num) is not None:
-                card_numbers.add(card_num)
-            attempt += 1
-
-        if len(card_numbers) < 3:
+        try:
+            cards = generate_unique_cards(deck_type, count=3)
+        except ValueError as e:
             logger.error(
-                f"Failed to generate 3 unique cards for user {callback.from_user.id} "
-                f"with deck {deck_type}"
+                f"Failed to generate cards for user {callback.from_user.id}: {e}"
             )
             await callback.answer(
                 "😔 Не удалось сгенерировать карты. Попробуйте выбрать другую колоду в /settings",
                 show_alert=True
             )
             return
-
-        # Преобразуем в список для стабильного порядка
-        cards = list(card_numbers)
 
         # Формируем callback_data с номерами карт
         # Для обычных пользователей используем daily, для ADMIN - ondemand
