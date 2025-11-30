@@ -39,11 +39,15 @@ async def cmd_start(message: Message, bot: Bot):
         message.from_user.first_name
     )
 
-    # Создаём inline клавиатуру с двумя кнопками
+    # Создаём inline клавиатуру с тремя кнопками
     keyboard = InlineKeyboardBuilder()
     keyboard.button(
         text="🌅 Получить карту дня",
         callback_data="start:get_card"
+    )
+    keyboard.button(
+        text="🔮 Задать вопрос Небесной канцелярии",
+        callback_data="ask:question"
     )
     keyboard.button(
         text="⚙️ Настройки",

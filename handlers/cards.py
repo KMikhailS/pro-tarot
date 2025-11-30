@@ -73,11 +73,19 @@ async def send_card_to_user(
         if card_desc:
             caption += f"{card_desc}"
 
+        # Создаём клавиатуру с кнопкой "Задать вопрос Небесной канцелярии"
+        keyboard = InlineKeyboardBuilder()
+        keyboard.button(
+            text="🔮 Задать вопрос Небесной канцелярии",
+            callback_data="ask:question"
+        )
+
         await bot.send_photo(
             chat_id=user_id,
             photo=photo,
             caption=caption,
-            parse_mode='HTML'
+            parse_mode='HTML',
+            reply_markup=keyboard.as_markup()
         )
 
         # Если это ежедневная карта - отмечаем в БД

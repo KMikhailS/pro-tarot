@@ -148,11 +148,15 @@ async def callback_settings_main(callback: CallbackQuery):
 @router.callback_query(F.data == "menu:main")
 async def callback_main_menu(callback: CallbackQuery, bot: Bot):
     """Вернуться в главное меню бота"""
-    # Создаём inline клавиатуру с двумя кнопками
+    # Создаём inline клавиатуру с тремя кнопками
     keyboard = InlineKeyboardBuilder()
     keyboard.button(
         text="🌅 Получить карту дня",
         callback_data="start:get_card"
+    )
+    keyboard.button(
+        text="🔮 Задать вопрос Небесной канцелярии",
+        callback_data="ask:question"
     )
     keyboard.button(
         text="⚙️ Настройки",
