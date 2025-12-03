@@ -59,31 +59,42 @@ async def send_card_to_user(
         # Создаём BufferedInputFile из байтов
         photo = BufferedInputFile(photo_bytes, filename=card_path.name)
 
-        # Формируем подпись с названием и описанием
+        # Отправляем сначала только изображение карты
+        await bot.send_photo(
+            chat_id=user_id,
+            photo=photo
+        )
+
+        # Формируем текст с названием и описанием для отдельного сообщения
         today = date.today()
         formatted_date = today.strftime("%d.%m.%Y")
 
         if is_daily:
             # Для карты дня
-            caption = f"✨ Твоя карта дня на сегодня ({formatted_date}) — <b>{card_name}</b>\n\n"
+            text = f"✨ Твоя карта дня на сегодня ({formatted_date}) — <b>{card_name}</b>\n\n"
         else:
             # Для карты по запросу /get_card - тоже с датой
-            caption = f"✨ Твоя карта дня на сегодня ({formatted_date}) — <b>{card_name}</b>\n\n"
+            text = f"✨ Твоя карта дня на сегодня ({formatted_date}) — <b>{card_name}</b>\n\n"
 
         if card_desc:
-            caption += f"{card_desc}"
+            text += f"{card_desc}"
 
-        # Создаём клавиатуру с кнопкой "Задать вопрос Небесной канцелярии"
+        # Создаём клавиатуру с кнопками
         keyboard = InlineKeyboardBuilder()
         keyboard.button(
             text="🔮 Задать вопрос Небесной канцелярии",
             callback_data="ask:question"
         )
+        keyboard.button(
+            text="⚙️ Настройки",
+            callback_data="settings:main"
+        )
+        keyboard.adjust(1)  # По 1 кнопке в строку
 
-        await bot.send_photo(
+        # Отправляем описание карты отдельным сообщением
+        await bot.send_message(
             chat_id=user_id,
-            photo=photo,
-            caption=caption,
+            text=text,
             parse_mode='HTML',
             reply_markup=keyboard.as_markup()
         )
