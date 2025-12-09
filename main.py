@@ -1,6 +1,7 @@
 import asyncio
 import os
 import logging
+from logging.handlers import RotatingFileHandler
 
 import aiofiles
 from aiogram import Bot, Dispatcher, Router
@@ -15,11 +16,33 @@ from handlers import settings, cards, ai_answer
 from scheduler.daily_sender import start_daily_sender_apscheduler, preload_card_descriptions
 from utils.image_cache import load_main_image, get_cached_image
 
+# Создаём директорию для логов, если её нет
+os.makedirs('logs', exist_ok=True)
+
 # Настройка логирования
+log_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+# Обработчик для записи в файл с ротацией (макс. 10 МБ, хранить 5 файлов)
+file_handler = RotatingFileHandler(
+    'logs/bot.log',
+    maxBytes=10 * 1024 * 1024,  # 10 МБ
+    backupCount=5,
+    encoding='utf-8'
+)
+file_handler.setLevel(logging.INFO)
+file_handler.setFormatter(log_format)
+
+# Обработчик для вывода в консоль
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+console_handler.setFormatter(log_format)
+
+# Настраиваем root logger
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    handlers=[file_handler, console_handler]
 )
+
 logger = logging.getLogger(__name__)
 
 load_dotenv()
