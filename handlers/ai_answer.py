@@ -166,30 +166,55 @@ async def callback_category_selected(callback: CallbackQuery, state: FSMContext)
         await state.set_state(AIAnswerStates.waiting_for_question)
         await callback.answer()
     else:
-        # Для остальных категорий показываем инструкцию на 5 секунд
-        instruction_msg = await callback.message.answer(CATEGORY_RESPONSE_TEXT)
+        # Для остальных категорий показываем инструкцию с кнопкой "Получить расклад"
+        keyboard = InlineKeyboardBuilder()
+        keyboard.button(
+            text="🔮 Получить расклад",
+            callback_data=f"spread:get:{category}"
+        )
+        keyboard.adjust(1)
+
+        await callback.message.answer(
+            CATEGORY_RESPONSE_TEXT,
+            reply_markup=keyboard.as_markup()
+        )
         await callback.answer()
 
-        # Ждём 5 секунд
-        await asyncio.sleep(5)
-
-        # Удаляем сообщение с инструкцией
-        try:
-            await instruction_msg.delete()
-        except Exception as e:
-            logger.warning(f"Failed to delete instruction message: {e}")
-
-        # Получаем название категории
-        category_name = category_names.get(category, "будущее")
-
-        # Отправляем AI запрос с генерацией карт
-        await send_category_ai_request(
-            callback.message,
-            category_name,
-            callback.from_user.id
-        )
-
     logger.info(f"User {callback.from_user.id} selected category: {category}")
+
+
+@router.callback_query(F.data.startswith("spread:get:"))
+async def callback_get_spread(callback: CallbackQuery):
+    """
+    Обработчик нажатия на кнопку "Получить расклад".
+    Запускает генерацию расклада для выбранной категории.
+    """
+    # Извлекаем категорию из callback_data
+    category = callback.data.split(":")[2]
+
+    # Маппинг категорий на их названия
+    category_names = {
+        "love": "Любовь и отношения",
+        "finance": "Финансы и реализация",
+        "family": "Семья",
+        "future": "Предстоящее будущее",
+        "travel": "Путешествия"
+    }
+
+    # Получаем название категории
+    category_name = category_names.get(category, "будущее")
+
+    # Подтверждаем нажатие кнопки
+    await callback.answer()
+
+    # Отправляем AI запрос с генерацией карт
+    await send_category_ai_request(
+        callback.message,
+        category_name,
+        callback.from_user.id
+    )
+
+    logger.info(f"User {callback.from_user.id} requested spread for category: {category}")
 
 
 @router.message(Command("get_answer"))
@@ -291,7 +316,7 @@ async def send_category_ai_request(message: Message, category_name: str, user_id
         2) Совет/что делать.
         3) Вероятный исход в ближайшие 1–3 месяца при следовании совету.
         Дай цельную интерпретацию, связывая карты между собой: ключевой конфликт/ресурс, где узкое место и что поддерживает. Минимизируй «книжные» определения, больше контекста и причинно-следственных связей. Тон поддерживающий и прагматичный, без обещаний и вмешательства в волю третьих лиц.
-        В конце предложи 2–3 конкретных шага. Без эзотерической «воды» и предупреждений. Объём 1500-2000 знаков.
+        В конце предложи 2–3 конкретных шага. Без эзотерической «воды» и предупреждений. Объём 1200-1500 знаков.
         Каждый пункт в Шаги начинай с новой строки
         Формат ответа:
         Краткая картина: …
@@ -352,7 +377,7 @@ async def send_category_ai_request(message: Message, category_name: str, user_id
                     "content": user_message
                 }
             ],
-            max_tokens=2000,
+            max_tokens=1500,
             stream=True  # Включаем стриминг
         )
 
@@ -419,7 +444,6 @@ async def send_category_ai_request(message: Message, category_name: str, user_id
             f"cards: {card_names}, "
             f"answer length: {len(full_response)}"
         )
-        logger.info("Final text" + final_text)
 
     except asyncio.CancelledError:
         logger.warning(f"AI request cancelled for user {user_id}")
