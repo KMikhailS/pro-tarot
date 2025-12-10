@@ -9,10 +9,11 @@ from typing import Optional
 
 from aiogram import Bot
 from aiogram.types import BufferedInputFile
+from aiogram.exceptions import TelegramForbiddenError
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from database.db import get_users_for_daily_send, mark_daily_card_sent
+from database.db import get_users_for_daily_send, mark_daily_card_sent, disable_daily_card
 
 logger = logging.getLogger(__name__)
 
@@ -256,6 +257,12 @@ async def send_daily_card(bot: Bot, user_id: int, deck_type: str):
             f"cards={cards}, deck={deck_type}"
         )
 
+    except TelegramForbiddenError as e:
+        # Пользователь заблокировал бота - отключаем ежедневные карты
+        logger.warning(
+            f"User {user_id} blocked the bot. Disabling daily cards for this user."
+        )
+        await disable_daily_card(user_id)
     except Exception as e:
         logger.error(
             f"Failed to send card choice to user {user_id}: {e}",

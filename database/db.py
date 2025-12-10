@@ -52,6 +52,10 @@ async def add_user(user_id: int, username: Optional[str], first_name: Optional[s
     - deck_type = 'alfons_mucha' (Колода Альфонса Мухи)
     - send_hour = 8 (08:00)
     - role = 'USER'
+
+    При повторном входе (пользователь уже существует):
+    - Обновляется username и first_name
+    - daily_card_enabled автоматически включается обратно (полезно если бот был заблокирован)
     """
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
@@ -59,7 +63,8 @@ async def add_user(user_id: int, username: Optional[str], first_name: Optional[s
                VALUES (?, ?, ?, ?, 1, 180, 'alfons_mucha', 8, 'USER')
                ON CONFLICT(user_id) DO UPDATE SET
                    username = excluded.username,
-                   first_name = excluded.first_name""",
+                   first_name = excluded.first_name,
+                   daily_card_enabled = 1""",
             (user_id, username, first_name, datetime.now().isoformat())
         )
         await db.commit()
@@ -260,3 +265,19 @@ async def get_user_role(user_id: int) -> Optional[str]:
         ) as cursor:
             row = await cursor.fetchone()
             return row[0] if row else None
+
+
+async def disable_daily_card(user_id: int):
+    """
+    Отключить ежедневную отправку карт для пользователя.
+    Используется когда бот заблокирован пользователем.
+
+    Args:
+        user_id: ID пользователя
+    """
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE users SET daily_card_enabled = 0 WHERE user_id = ?",
+            (user_id,)
+        )
+        await db.commit()
