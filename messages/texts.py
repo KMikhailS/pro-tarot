@@ -101,3 +101,36 @@ GET_ANSWER_PROMPT = """Задай свой вопрос и Небесная ка
 GET_ANSWER_PROCESSING = """⏳ Обрабатываю твой запрос..."""
 
 GET_ANSWER_ERROR = """❌ Произошла ошибка при обработке запроса. Попробуй позже."""
+
+# ============== Admin Links ==============
+
+ADMIN_LINK_HELP = """🔗 Генератор реферальных ссылок
+
+Отправь JSON с UTM параметрами для создания ссылки:
+
+```json
+{
+  "utm_source": "telegain",
+  "utm_medium": "cpp",
+  "utm_campaign": "kampaniq-ot-09-12-2025",
+  "utm_content": "beautyprocontent",
+  "utm_term": "4ee68255ac5f69f101d6ae31",
+  "erid": "2W5zFJ4UyYL"
+}
+```
+
+Бот сгенерирует ссылку с закодированными параметрами."""
+
+ADMIN_LINK_ACCESS_DENIED = """❌ Эта команда доступна только администраторам."""
+
+ADMIN_LINK_INVALID_JSON = """❌ Ошибка: неверный формат JSON.
+
+Пожалуйста, отправь корректный JSON с UTM параметрами."""
+
+ADMIN_LINK_SUCCESS = """✅ Ссылка успешно создана!
+
+🔗 Реферальная ссылка:
+`{link}`
+
+📋 UTM параметры:
+{params}"""

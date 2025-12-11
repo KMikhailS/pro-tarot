@@ -12,7 +12,7 @@ from dotenv import load_dotenv, find_dotenv
 
 from messages import ABOUT_TEXT
 from database.db import init_db, add_user
-from handlers import settings, cards, ai_answer
+from handlers import settings, cards, ai_answer, admin_links
 from scheduler.daily_sender import start_daily_sender_apscheduler, preload_card_descriptions
 from utils.image_cache import load_main_image, get_cached_image
 
@@ -137,6 +137,7 @@ async def main():
     dp.include_router(settings.router)
     dp.include_router(cards.router)
     dp.include_router(ai_answer.router)
+    dp.include_router(admin_links.router)
 
     # Запуск APScheduler для ежедневных карт
     scheduler = start_daily_sender_apscheduler(bot)
