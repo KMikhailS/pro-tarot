@@ -111,7 +111,7 @@ async def process_utm_json(message: Message, state: FSMContext):
             raise ValueError("Expected a dictionary/object")
 
         # Получаем имя бота из переменной окружения или используем дефолтное
-        bot_username = os.getenv("BOT_USERNAME", "tarot_bot")
+        bot_username = os.getenv("BOT_USERNAME", "pro_tarot_bot")
         # Убираем @ если он есть
         bot_username = bot_username.lstrip("@")
 
