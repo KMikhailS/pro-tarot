@@ -39,11 +39,26 @@ async def init_db():
             if 'role' not in column_names:
                 await db.execute("ALTER TABLE users ADD COLUMN role VARCHAR(32) DEFAULT 'USER'")
 
+        # Таблица для хранения UTM параметров ссылок (генерируется админом)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS link_params (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                utm_source TEXT,
+                utm_medium TEXT,
+                utm_campaign TEXT,
+                utm_content TEXT,
+                utm_term TEXT,
+                erid TEXT,
+                created_at TEXT NOT NULL
+            )
+        """)
+
         # Создание таблицы для аналитики подписок
         await db.execute("""
             CREATE TABLE IF NOT EXISTS subscribe_analytics (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
+                link_id INTEGER,
                 utm_source TEXT,
                 utm_medium TEXT,
                 utm_campaign TEXT,
@@ -51,7 +66,8 @@ async def init_db():
                 utm_term TEXT,
                 erid TEXT,
                 created_at TEXT NOT NULL,
-                FOREIGN KEY (user_id) REFERENCES users (user_id)
+                FOREIGN KEY (user_id) REFERENCES users (user_id),
+                FOREIGN KEY (link_id) REFERENCES link_params (id)
             )
         """)
 
@@ -305,21 +321,73 @@ async def disable_daily_card(user_id: int):
         await db.commit()
 
 
-async def add_subscription_analytics(user_id: int, utm_params: dict):
+async def create_link_params(utm_params: dict) -> int:
+    """
+    Сохранить UTM параметры для генерации короткой ссылки.
+
+    Args:
+        utm_params: Словарь с UTM параметрами
+
+    Returns:
+        ID сохраненной записи
+    """
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            """INSERT INTO link_params
+               (utm_source, utm_medium, utm_campaign, utm_content, utm_term, erid, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                utm_params.get('utm_source'),
+                utm_params.get('utm_medium'),
+                utm_params.get('utm_campaign'),
+                utm_params.get('utm_content'),
+                utm_params.get('utm_term'),
+                utm_params.get('erid'),
+                datetime.now().isoformat()
+            )
+        )
+        await db.commit()
+        return cursor.lastrowid
+
+
+async def get_link_params(link_id: int) -> Optional[dict]:
+    """
+    Получить UTM параметры по ID ссылки.
+
+    Args:
+        link_id: ID записи в link_params
+
+    Returns:
+        Словарь с параметрами или None
+    """
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            """SELECT utm_source, utm_medium, utm_campaign, utm_content, utm_term, erid
+               FROM link_params WHERE id = ?""",
+            (link_id,)
+        ) as cursor:
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+
+
+async def add_subscription_analytics(user_id: int, utm_params: dict, link_id: Optional[int] = None):
     """
     Сохранить данные аналитики подписки.
 
     Args:
         user_id: ID пользователя
         utm_params: Словарь с UTM параметрами (utm_source, utm_medium, utm_campaign, utm_content, utm_term, erid)
+        link_id: ID ссылки из link_params (опционально)
     """
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
             """INSERT INTO subscribe_analytics
-               (user_id, utm_source, utm_medium, utm_campaign, utm_content, utm_term, erid, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+               (user_id, link_id, utm_source, utm_medium, utm_campaign, utm_content, utm_term, erid, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 user_id,
+                link_id,
                 utm_params.get('utm_source'),
                 utm_params.get('utm_medium'),
                 utm_params.get('utm_campaign'),

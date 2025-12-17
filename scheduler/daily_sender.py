@@ -119,37 +119,64 @@ def markdown_to_html(text: str) -> str:
     return text
 
 
+async def _load_single_card_description(card_number: int) -> tuple[int, Optional[tuple[str, str]]]:
+    """
+    Загрузить описание одной карты.
+
+    Args:
+        card_number: Номер карты (0-77)
+
+    Returns:
+        (card_number, (card_name, card_description_html)) или (card_number, None) при ошибке
+    """
+    desc_path = CARDS_DESC_DIR / f"{card_number}.txt"
+
+    if not desc_path.exists():
+        return (card_number, None)
+
+    try:
+        import aiofiles
+        async with aiofiles.open(desc_path, 'r', encoding='utf-8') as f:
+            content = await f.read()
+
+        lines = content.strip().split('\n')
+        if len(lines) >= 2:
+            card_name = lines[0].strip()
+            card_description = '\n'.join(lines[1:]).strip()
+            card_description_html = markdown_to_html(card_description)
+            return (card_number, (card_name, card_description_html))
+        else:
+            return (card_number, None)
+    except Exception as e:
+        logger.warning(f"Failed to load description for card {card_number}: {e}")
+        return (card_number, None)
+
+
 async def preload_card_descriptions():
     """
     Предзагрузить все описания карт в кэш при старте бота.
 
-    Это значительно ускоряет отправку карт, так как не нужно
-    читать файлы с диска каждый раз.
+    Использует параллельную загрузку для значительного ускорения.
     """
     logger.info("Preloading card descriptions into cache...")
 
+    # Создаем задачи для параллельной загрузки всех карт
+    tasks = [_load_single_card_description(i) for i in range(TOTAL_CARDS)]
+
+    # Запускаем все задачи параллельно
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    # Обрабатываем результаты
     loaded_count = 0
-    for card_number in range(TOTAL_CARDS):
-        desc_path = CARDS_DESC_DIR / f"{card_number}.txt"
+    for result in results:
+        if isinstance(result, Exception):
+            logger.warning(f"Exception during card loading: {result}")
+            continue
 
-        if desc_path.exists():
-            try:
-                import aiofiles
-                async with aiofiles.open(desc_path, 'r', encoding='utf-8') as f:
-                    content = await f.read()
-
-                lines = content.strip().split('\n')
-                if len(lines) >= 2:
-                    card_name = lines[0].strip()
-                    card_description = '\n'.join(lines[1:]).strip()
-                    card_description_html = markdown_to_html(card_description)
-
-                    _card_descriptions_cache[card_number] = (card_name, card_description_html)
-                    loaded_count += 1
-            except Exception as e:
-                logger.warning(f"Failed to load description for card {card_number}: {e}")
-        else:
-            logger.debug(f"Description file not found for card {card_number}")
+        card_number, description = result
+        if description is not None:
+            _card_descriptions_cache[card_number] = description
+            loaded_count += 1
 
     logger.info(f"Preloaded {loaded_count} card descriptions into cache")
 

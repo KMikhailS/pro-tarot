@@ -11,7 +11,7 @@ from aiogram.types import Message
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-from database.db import get_user_role
+from database.db import get_user_role, create_link_params
 from messages import (
     ADMIN_LINK_HELP,
     ADMIN_LINK_ACCESS_DENIED,
@@ -29,22 +29,18 @@ class LinkGenStates(StatesGroup):
     waiting_for_json = State()
 
 
-def generate_bot_link(bot_username: str, utm_params: dict) -> str:
+def generate_bot_link(bot_username: str, link_id: int) -> str:
     """
-    Генерирует ссылку на бота с закодированными UTM параметрами.
+    Генерирует ссылку на бота с ID параметров.
 
     Args:
         bot_username: Имя пользователя бота (без @)
-        utm_params: Словарь с UTM параметрами
+        link_id: ID записи в БД с UTM параметрами
 
     Returns:
-        Готовая ссылка на бота с закодированными параметрами
+        Готовая ссылка на бота с ID
     """
-    # Кодируем UTM параметры в base64
-    json_str = json.dumps(utm_params, ensure_ascii=False)
-    encoded = base64.urlsafe_b64encode(json_str.encode('utf-8')).decode('utf-8')
-
-    return f"https://t.me/{bot_username}?start={encoded}"
+    return f"https://t.me/{bot_username}?start={link_id}"
 
 
 def format_utm_params(params: dict) -> str:
@@ -110,13 +106,16 @@ async def process_utm_json(message: Message, state: FSMContext):
         if not isinstance(utm_params, dict):
             raise ValueError("Expected a dictionary/object")
 
+        # Сохраняем параметры в БД и получаем ID
+        link_id = await create_link_params(utm_params)
+
         # Получаем имя бота из переменной окружения или используем дефолтное
         bot_username = os.getenv("BOT_USERNAME", "pro_tarot_bot")
         # Убираем @ если он есть
         bot_username = bot_username.lstrip("@")
 
-        # Генерируем ссылку
-        link = generate_bot_link(bot_username, utm_params)
+        # Генерируем ссылку с коротким ID
+        link = generate_bot_link(bot_username, link_id)
 
         # Форматируем параметры для отображения
         params_display = format_utm_params(utm_params)
@@ -132,7 +131,7 @@ async def process_utm_json(message: Message, state: FSMContext):
 
         logger.info(
             f"Admin {message.from_user.id} (@{message.from_user.username}) "
-            f"generated link with params: {utm_params}"
+            f"generated link ID={link_id} with params: {utm_params}"
         )
 
         # Сбрасываем состояние

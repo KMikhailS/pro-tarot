@@ -14,7 +14,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from dotenv import load_dotenv, find_dotenv
 
 from messages import ABOUT_TEXT
-from database.db import init_db, add_user, add_subscription_analytics
+from database.db import init_db, add_user, add_subscription_analytics, get_link_params
 from handlers import settings, cards, ai_answer, admin_links
 from scheduler.daily_sender import start_daily_sender_apscheduler, preload_card_descriptions
 from utils.video_cache import load_main_video, get_cached_video
@@ -74,27 +74,46 @@ async def cmd_start_with_deeplink(message: Message, bot: Bot):
     # Парсим параметр start для аналитики
     if start_param:
         try:
-
-            # Декодируем base64
-            decoded_bytes = base64.urlsafe_b64decode(start_param)
-            decoded_str = decoded_bytes.decode('utf-8')
-
-            # Парсим JSON (пробуем оба формата - стандартный и Python-синтаксис)
+            # Пробуем распарсить как ID (новый формат - короткая ссылка)
             try:
-                utm_params = json.loads(decoded_str)
-            except json.JSONDecodeError:
-                utm_params = ast.literal_eval(decoded_str)
+                link_id = int(start_param)
+                # Получаем параметры из БД по ID
+                utm_params = await get_link_params(link_id)
 
-            # Проверяем что это словарь
-            if isinstance(utm_params, dict) and utm_params:
-                # Сохраняем аналитику
-                await add_subscription_analytics(message.from_user.id, utm_params)
-                logger.info(
-                    f"User {message.from_user.id} subscribed with UTM params: {utm_params}"
-                )
-        except (ValueError, json.JSONDecodeError, SyntaxError, Exception) as e:
+                if utm_params:
+                    # Сохраняем аналитику с link_id
+                    await add_subscription_analytics(message.from_user.id, utm_params, link_id)
+                    logger.info(
+                        f"User {message.from_user.id} subscribed via link_id={link_id} with UTM params: {utm_params}"
+                    )
+                else:
+                    logger.warning(f"Link ID {link_id} not found in database")
+
+            except ValueError:
+                # Если не число - пробуем старый формат (base64)
+                logger.info(f"Trying legacy base64 format for param: {start_param}")
+
+                # Декодируем base64
+                decoded_bytes = base64.urlsafe_b64decode(start_param)
+                decoded_str = decoded_bytes.decode('utf-8')
+
+                # Парсим JSON (пробуем оба формата - стандартный и Python-синтаксис)
+                try:
+                    utm_params = json.loads(decoded_str)
+                except json.JSONDecodeError:
+                    utm_params = ast.literal_eval(decoded_str)
+
+                # Проверяем что это словарь
+                if isinstance(utm_params, dict) and utm_params:
+                    # Сохраняем аналитику без link_id (старый формат)
+                    await add_subscription_analytics(message.from_user.id, utm_params)
+                    logger.info(
+                        f"User {message.from_user.id} subscribed with legacy UTM params: {utm_params}"
+                    )
+
+        except Exception as e:
             # Игнорируем ошибки парсинга - невалидные параметры не критичны
-            logger.warning(f"Failed to parse start parameter: {e}")
+            logger.warning(f"Failed to parse start parameter '{start_param}': {e}")
 
     # Отправляем приветствие
     await send_welcome_message(message, bot)
@@ -178,15 +197,17 @@ async def main():
     bot = Bot(token=BOT_TOKEN)
     dp = Dispatcher()
 
-    # Загружаем видео в кэш перед стартом
-    main_video = await load_main_video()
-    if main_video:
+    # Параллельная загрузка видео и описаний карт для ускорения старта
+    logger.info("Loading video and card descriptions in parallel...")
+    video_result, _ = await asyncio.gather(
+        load_main_video(),
+        preload_card_descriptions()
+    )
+
+    if video_result:
         logger.info("Main video cached successfully")
     else:
         logger.warning("Failed to cache main video, handlers will use fallback")
-
-    # Предзагружаем описания карт в кэш
-    await preload_card_descriptions()
 
     # Регистрируем роутеры
     dp.include_router(router)
