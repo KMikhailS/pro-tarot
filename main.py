@@ -9,6 +9,7 @@ import base64
 import aiofiles
 from aiogram import Bot, Dispatcher, Router
 from aiogram.filters import CommandStart
+from aiogram.filters.command import CommandObject
 from aiogram.types import Message, BufferedInputFile
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from dotenv import load_dotenv, find_dotenv
@@ -56,7 +57,7 @@ router = Router()
 
 
 @router.message(CommandStart())
-async def cmd_start(message: Message, bot: Bot):
+async def cmd_start(message: Message, bot: Bot, command: CommandObject):
     """Обработчик команды /start"""
     # Сохраняем пользователя в БД
     await add_user(
@@ -65,13 +66,14 @@ async def cmd_start(message: Message, bot: Bot):
         message.from_user.first_name
     )
 
-    logger.info("Getting message from start " + message.text)
+    logger.info(f"Getting message from start: {message.text}")
+    logger.info(f"Command args: {command.args}")
 
     # Парсим параметр start для аналитики
-    if message.text and len(message.text.split()) > 1:
+    if command.args:
         try:
-            # Получаем параметр после /start
-            start_param = message.text.split(maxsplit=1)[1]
+            # Получаем параметр после /start из command.args (deep link)
+            start_param = command.args
 
             # Декодируем base64
             decoded_bytes = base64.urlsafe_b64decode(start_param)
