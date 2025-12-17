@@ -65,6 +65,8 @@ async def cmd_start(message: Message, bot: Bot):
         message.from_user.first_name
     )
 
+    logger.info("Getting message from start " + message.text)
+
     # Парсим параметр start для аналитики
     if message.text and len(message.text.split()) > 1:
         try:
