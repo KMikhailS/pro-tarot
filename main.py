@@ -2,6 +2,9 @@ import asyncio
 import os
 import logging
 from logging.handlers import RotatingFileHandler
+import json
+import ast
+import base64
 
 import aiofiles
 from aiogram import Bot, Dispatcher, Router
@@ -11,7 +14,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from dotenv import load_dotenv, find_dotenv
 
 from messages import ABOUT_TEXT
-from database.db import init_db, add_user
+from database.db import init_db, add_user, add_subscription_analytics
 from handlers import settings, cards, ai_answer, admin_links
 from scheduler.daily_sender import start_daily_sender_apscheduler, preload_card_descriptions
 from utils.video_cache import load_main_video, get_cached_video
@@ -61,6 +64,34 @@ async def cmd_start(message: Message, bot: Bot):
         message.from_user.username,
         message.from_user.first_name
     )
+
+    # Парсим параметр start для аналитики
+    if message.text and len(message.text.split()) > 1:
+        try:
+            # Получаем параметр после /start
+            start_param = message.text.split(maxsplit=1)[1]
+
+            # Декодируем base64
+            decoded_bytes = base64.urlsafe_b64decode(start_param)
+            decoded_str = decoded_bytes.decode('utf-8')
+
+            # Парсим JSON (пробуем оба формата - стандартный и Python-синтаксис)
+            try:
+                utm_params = json.loads(decoded_str)
+            except json.JSONDecodeError:
+                utm_params = ast.literal_eval(decoded_str)
+
+            # Проверяем что это словарь
+            if isinstance(utm_params, dict) and utm_params:
+                # Сохраняем аналитику
+                await add_subscription_analytics(message.from_user.id, utm_params)
+                logger.info(
+                    f"User {message.from_user.id} subscribed with UTM params: {utm_params}"
+                )
+        except (ValueError, json.JSONDecodeError, SyntaxError, Exception) as e:
+            # Игнорируем ошибки парсинга - невалидные параметры не критичны
+            logger.debug(f"Failed to parse start parameter: {e}")
+            pass
 
     # Создаём inline клавиатуру с тремя кнопками
     keyboard = InlineKeyboardBuilder()

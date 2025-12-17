@@ -39,6 +39,28 @@ async def init_db():
             if 'role' not in column_names:
                 await db.execute("ALTER TABLE users ADD COLUMN role VARCHAR(32) DEFAULT 'USER'")
 
+        # Создание таблицы для аналитики подписок
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS subscribe_analytics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                utm_source TEXT,
+                utm_medium TEXT,
+                utm_campaign TEXT,
+                utm_content TEXT,
+                utm_term TEXT,
+                erid TEXT,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users (user_id)
+            )
+        """)
+
+        # Индекс для быстрого поиска по user_id
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_analytics_user_id
+            ON subscribe_analytics(user_id)
+        """)
+
         await db.commit()
 
 
@@ -279,5 +301,32 @@ async def disable_daily_card(user_id: int):
         await db.execute(
             "UPDATE users SET daily_card_enabled = 0 WHERE user_id = ?",
             (user_id,)
+        )
+        await db.commit()
+
+
+async def add_subscription_analytics(user_id: int, utm_params: dict):
+    """
+    Сохранить данные аналитики подписки.
+
+    Args:
+        user_id: ID пользователя
+        utm_params: Словарь с UTM параметрами (utm_source, utm_medium, utm_campaign, utm_content, utm_term, erid)
+    """
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """INSERT INTO subscribe_analytics
+               (user_id, utm_source, utm_medium, utm_campaign, utm_content, utm_term, erid, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                user_id,
+                utm_params.get('utm_source'),
+                utm_params.get('utm_medium'),
+                utm_params.get('utm_campaign'),
+                utm_params.get('utm_content'),
+                utm_params.get('utm_term'),
+                utm_params.get('erid'),
+                datetime.now().isoformat()
+            )
         )
         await db.commit()
