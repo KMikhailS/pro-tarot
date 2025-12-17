@@ -68,6 +68,7 @@ async def cmd_start(message: Message, bot: Bot, command: CommandObject):
 
     logger.info(f"Getting message from start: {message.text}")
     logger.info(f"Command args: {command.args}")
+    logger.info(f"Message dict: {message.model_dump()}")
 
     # Парсим параметр start для аналитики
     if command.args:
