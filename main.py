@@ -14,7 +14,7 @@ from messages import ABOUT_TEXT
 from database.db import init_db, add_user
 from handlers import settings, cards, ai_answer, admin_links
 from scheduler.daily_sender import start_daily_sender_apscheduler, preload_card_descriptions
-from utils.image_cache import load_main_image, get_cached_image
+from utils.video_cache import load_main_video, get_cached_video
 
 # Создаём директорию для логов, если её нет
 os.makedirs('logs', exist_ok=True)
@@ -65,12 +65,12 @@ async def cmd_start(message: Message, bot: Bot):
     # Создаём inline клавиатуру с тремя кнопками
     keyboard = InlineKeyboardBuilder()
     keyboard.button(
-        text="🌅 Получить карту дня",
-        callback_data="start:get_card"
+        text="🔮 Таро расклад",
+        callback_data="ask:question"
     )
     keyboard.button(
-        text="🔮 Задать вопрос Небесной канцелярии",
-        callback_data="ask:question"
+        text="🌅 Получить карту дня",
+        callback_data="start:get_card"
     )
     keyboard.button(
         text="⚙️ Настройки",
@@ -78,34 +78,34 @@ async def cmd_start(message: Message, bot: Bot):
     )
     keyboard.adjust(1)  # По 1 кнопке в строку
 
-    # Получаем кэшированное изображение
-    image_data = get_cached_image()
+    # Получаем кэшированное видео
+    video_data = get_cached_video()
 
-    if image_data is None:
+    if video_data is None:
         # Fallback: если кэш отсутствует, загружаем напрямую
-        logger.warning("Image cache miss in /start handler")
+        logger.warning("Video cache miss in /start handler")
         try:
-            async with aiofiles.open("images/main.png", "rb") as image_file:
-                image_data = await image_file.read()
+            async with aiofiles.open("video/intro.mp4", "rb") as video_file:
+                video_data = await video_file.read()
         except FileNotFoundError:
-            logger.error("Main image file not found at images/main.png")
+            logger.error("Main video file not found at video/intro.mp4")
             await message.answer(
-                f"{ABOUT_TEXT}\n\n⚠️ Изображение временно недоступно.",
+                f"{ABOUT_TEXT}\n\n⚠️ Видео временно недоступно.",
                 reply_markup=keyboard.as_markup()
             )
             return
         except Exception as e:
-            logger.error(f"Error loading main image: {e}", exc_info=True)
+            logger.error(f"Error loading main video: {e}", exc_info=True)
             await message.answer(
-                f"{ABOUT_TEXT}\n\n⚠️ Произошла ошибка при загрузке изображения.",
+                f"{ABOUT_TEXT}\n\n⚠️ Произошла ошибка при загрузке видео.",
                 reply_markup=keyboard.as_markup()
             )
             return
 
-    # Отправляем фото с приветственным текстом
-    photo = BufferedInputFile(image_data, filename="main.png")
-    await message.answer_photo(
-        photo=photo,
+    # Отправляем видео с приветственным текстом
+    video = BufferedInputFile(video_data, filename="intro.mp4")
+    await message.answer_video(
+        video=video,
         caption=ABOUT_TEXT,
         reply_markup=keyboard.as_markup()
     )
@@ -122,12 +122,12 @@ async def main():
     bot = Bot(token=BOT_TOKEN)
     dp = Dispatcher()
 
-    # Загружаем изображение в кэш перед стартом
-    main_image = await load_main_image()
-    if main_image:
-        logger.info("Main image cached successfully")
+    # Загружаем видео в кэш перед стартом
+    main_video = await load_main_video()
+    if main_video:
+        logger.info("Main video cached successfully")
     else:
-        logger.warning("Failed to cache main image, handlers will use fallback")
+        logger.warning("Failed to cache main video, handlers will use fallback")
 
     # Предзагружаем описания карт в кэш
     await preload_card_descriptions()

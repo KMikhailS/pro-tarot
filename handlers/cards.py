@@ -82,7 +82,7 @@ async def send_card_to_user(
         # Создаём клавиатуру с кнопками
         keyboard = InlineKeyboardBuilder()
         keyboard.button(
-            text="🔮 Задать вопрос Небесной канцелярии",
+            text="🔮 Таро расклад",
             callback_data="ask:question"
         )
         keyboard.button(

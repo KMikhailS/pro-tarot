@@ -354,7 +354,7 @@ async def send_category_ai_request(message: Message, category_name: str, user_id
         # Создаём клавиатуру с двумя кнопками для финального ответа
         keyboard = InlineKeyboardBuilder()
         keyboard.button(
-            text="🔮 Задать вопрос Небесной канцелярии",
+            text="🔮 Таро расклад",
             callback_data="ask:question"
         )
         keyboard.button(

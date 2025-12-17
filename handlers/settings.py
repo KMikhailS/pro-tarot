@@ -151,12 +151,12 @@ async def callback_main_menu(callback: CallbackQuery, bot: Bot):
     # Создаём inline клавиатуру с тремя кнопками
     keyboard = InlineKeyboardBuilder()
     keyboard.button(
-        text="🌅 Получить карту дня",
-        callback_data="start:get_card"
+        text="🔮 Таро расклад",
+        callback_data="ask:question"
     )
     keyboard.button(
-        text="🔮 Задать вопрос Небесной канцелярии",
-        callback_data="ask:question"
+        text="🌅 Получить карту дня",
+        callback_data="start:get_card"
     )
     keyboard.button(
         text="⚙️ Настройки",
