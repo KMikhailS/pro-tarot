@@ -9,7 +9,6 @@ import base64
 import aiofiles
 from aiogram import Bot, Dispatcher, Router
 from aiogram.filters import CommandStart
-from aiogram.filters.command import CommandObject
 from aiogram.types import Message, BufferedInputFile
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from dotenv import load_dotenv, find_dotenv
@@ -56,9 +55,9 @@ BOT_TOKEN = os.getenv('BOT_TOKEN')
 router = Router()
 
 
-@router.message(CommandStart())
-async def cmd_start(message: Message, bot: Bot, command: CommandObject):
-    """Обработчик команды /start"""
+@router.message(CommandStart(deep_link=True))
+async def cmd_start_with_deeplink(message: Message, bot: Bot):
+    """Обработчик команды /start с deep link параметром"""
     # Сохраняем пользователя в БД
     await add_user(
         message.from_user.id,
@@ -66,15 +65,15 @@ async def cmd_start(message: Message, bot: Bot, command: CommandObject):
         message.from_user.first_name
     )
 
-    logger.info(f"Getting message from start: {message.text}")
-    logger.info(f"Command args: {command.args}")
-    logger.info(f"Message dict: {message.model_dump()}")
+    # Получаем deep link из текста команды
+    start_param = message.text.split(maxsplit=1)[1] if len(message.text.split()) > 1 else None
+
+    logger.info(f"Getting message from start WITH deep link: {message.text}")
+    logger.info(f"Deep link param: {start_param}")
 
     # Парсим параметр start для аналитики
-    if command.args:
+    if start_param:
         try:
-            # Получаем параметр после /start из command.args (deep link)
-            start_param = command.args
 
             # Декодируем base64
             decoded_bytes = base64.urlsafe_b64decode(start_param)
@@ -95,9 +94,30 @@ async def cmd_start(message: Message, bot: Bot, command: CommandObject):
                 )
         except (ValueError, json.JSONDecodeError, SyntaxError, Exception) as e:
             # Игнорируем ошибки парсинга - невалидные параметры не критичны
-            logger.debug(f"Failed to parse start parameter: {e}")
-            pass
+            logger.warning(f"Failed to parse start parameter: {e}")
 
+    # Отправляем приветствие
+    await send_welcome_message(message, bot)
+
+
+@router.message(CommandStart())
+async def cmd_start(message: Message, bot: Bot):
+    """Обработчик команды /start без параметров"""
+    # Сохраняем пользователя в БД
+    await add_user(
+        message.from_user.id,
+        message.from_user.username,
+        message.from_user.first_name
+    )
+
+    logger.info(f"Getting message from start WITHOUT deep link: {message.text}")
+
+    # Отправляем приветствие
+    await send_welcome_message(message, bot)
+
+
+async def send_welcome_message(message: Message, bot: Bot):
+    """Отправка приветственного сообщения с видео"""
     # Создаём inline клавиатуру с тремя кнопками
     keyboard = InlineKeyboardBuilder()
     keyboard.button(
