@@ -1,0 +1,15 @@
+services:
+  tarot-bot:
+    build: .
+    container_name: tarot-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      # Persist database between restarts
+      - ./data:/app/data
+      # Persist logs
+      - ./logs:/app/logs
+    environment:
+      - TZ=UTC
+      - DB_PATH=/app/data/tarot_bot.db

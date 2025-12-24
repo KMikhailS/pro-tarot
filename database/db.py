@@ -1,10 +1,11 @@
 """Модуль работы с SQLite базой данных"""
 
+import os
 import aiosqlite
 from typing import Optional, List
 from datetime import datetime, date
 
-DB_PATH = "tarot_bot.db"
+DB_PATH = os.getenv("DB_PATH", "tarot_bot.db")
 
 
 async def init_db():
