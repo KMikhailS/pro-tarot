@@ -15,7 +15,6 @@ tasks/
 todo/
 docs/
 changelog/
-video/
 test_*.py
 *.md
 .env
